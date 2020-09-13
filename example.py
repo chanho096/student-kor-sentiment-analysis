@@ -141,18 +141,45 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
     # load dataset
     dataset = nlp.data.TSVDataset("sentiment_dataset.csv", field_indices=[0, 1, 3], num_discard_samples=1)
-    object_text = "대상"
+    object_text_0 = "대상"
+    object_text_1 = "측면"
+
+    # random value
+    rnd_0 = np.random.uniform(0, 1, len(dataset)) > 0.5
+    rnd_1 = np.random.randint(0, len(dataset) - 1, len(dataset))
+    rnd_2 = np.random.uniform(0, 1, len(dataset)) > 0.5
 
     # split by list
     data_list = []
-    for corpus, aspect, label in list(dataset):
+    for idx, (corpus, aspect, label) in enumerate(list(dataset)):
         # original data
-        data_list.append([corpus, 0.5])
+        data_list.append([corpus, [0.5, 0.5, 0.5, 0.5]])
 
-        # augmented data
-        aug_corpus = corpus.replace(aspect, object_text)
+        # augmented data - single
         label_number = 1.0 if label == "positive" else 0.0
-        data_list.append([aug_corpus, label_number])
+        if rnd_0[idx]:
+            aug_corpus = corpus.replace(aspect, object_text_0)
+            aug_label = [1 - label_number, label_number, 0.5, 0.5]
+        else:
+            aug_corpus = corpus.replace(aspect, object_text_1)
+            aug_label = [0.5, 0.5, 1 - label_number, label_number]
+        data_list.append([aug_corpus, aug_label])
+
+        # augmented data - double
+        rnd_1[idx] = len(dataset) - 1 if rnd_1[idx] == idx else rnd_1[idx]
+        corpus_1, aspect_1, label_1 = dataset[rnd_1[idx]]
+        label_number_1 = 1.0 if label_1 == "positive" else 0.0
+
+        if rnd_2[idx]:
+            aug_text_0 = object_text_0
+            aug_text_1 = object_text_1
+        else:
+            aug_text_0 = object_text_1
+            aug_text_1 = object_text_0
+
+        aug_corpus = corpus.replace(aspect, aug_text_0) + " " + corpus_1.replace(aspect_1, aug_text_1)
+        aug_label = [1 - label_number, label_number, 1 - label_number_1, label_number_1]
+        data_list.append([aug_corpus, aug_label])
 
     # random shuffle
     random.shuffle(data_list)
@@ -170,10 +197,11 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     train_dataloader = torch.utils.data.DataLoader(dataset_train, batch_size=opt["batch_size"], num_workers=0)
     test_dataloader = torch.utils.data.DataLoader(dataset_test, batch_size=opt["batch_size"], num_workers=0)
 
-    # model
-    model = md.BERTClassifier(bert_model, dr_rate=opt["drop_out_rate"]).to(device)
-    model.load_state_dict(torch.load(example_model_path))
-    model = md.ABSAClassifier(bert_model, dr_rate=opt["drop_out_rate"]).to(device)
+    # aspect-base sentiment analysis model
+    sa_model = md.BERTClassifier(bert_model, dr_rate=opt["drop_out_rate"]).to(device)
+    sa_model.load_state_dict(torch.load(example_model_path))
+    model = md.ABSAClassifier(sa_model.bert, sa_model.classifier,
+                              dr_rate_0=opt["drop_out_rate"], dr_rate_1=0.5).to(device)
 
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
@@ -182,7 +210,7 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
     optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning_rate"])
-    loss_function = torch.nn.CrossEntropyLoss()
+    loss_function = md.softmax_cross_entropy_loss
 
     t_total = len(train_dataloader) * opt["num_epochs"]
     warmup_steps = int(t_total * opt["warmup_ratio"])
@@ -201,7 +229,7 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             token_ids = token_ids.long().to(device)
             segment_ids = segment_ids.long().to(device)
             valid_length = valid_length
-            label = label.long().to(device)
+            label = label.float().to(device)
 
             # get word embedding
             attention_mask = md.gen_attention_mask(token_ids, valid_length)
@@ -209,18 +237,19 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             x = word_embedding(token_ids)
 
             # forward propagation
-            out = model(x, segment_ids, attention_mask)
+            _, out_1, out_2 = model(x, segment_ids, attention_mask, sa=False, absa=True)
 
             # backward propagation
             x.retain_grad()
-            loss = loss_function(out, label)
+            loss = loss_function(out_1, label[:, 0:2]) + loss_function(out_2, label[:, 2:4])
             loss.backward()
 
             # optimization
             torch.nn.utils.clip_grad_norm_(model.parameters(), opt["max_grad_norm"])
             optimizer.step()
             scheduler.step()  # Update learning rate schedule
-            train_accuracy += md.calculate_accuracy(out, label)
+
+            train_accuracy += md.calculate_accuracy_absa(torch.cat((out_1, out_2), dim=1), label)
 
             if batch_id % opt["log_interval"] == 0:
                 print("epoch {} batch id {} loss {} train accuracy {}".format(e + 1, batch_id + 1,
