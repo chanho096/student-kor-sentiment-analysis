@@ -7,7 +7,7 @@ from gluonnlp.data import TSVDataset
 import numpy as np
 
 DEFAULT_OPTION = {
-    "batch_size": 4,
+    "batch_size": 64,
     "num_epochs": 5,
 
     # Pre-Processing
@@ -109,7 +109,7 @@ def gen_attention_mask(token_ids, valid_length):
     return attention_mask.float()
 
 
-def sentiment_analysis(model_path, corpus_path, sentence_idx, label_idx, opt=DEFAULT_OPTION, ctx="cuda:0"):
+def sentiment_analysis(model_path, corpus_path, sentence_idx, label_idx, opt=DEFAULT_OPTION, ctx="cuda:0", show=False):
     device = torch.device(ctx)
 
     # load bert model
@@ -126,9 +126,12 @@ def sentiment_analysis(model_path, corpus_path, sentence_idx, label_idx, opt=DEF
     model = BERTClassifier(bert_model).to(device)
     model.load_state_dict(torch.load(model_path))
 
-    # predict
-    model.eval()
+    # evaluate
+    result = np.zeros((len(bert_dataset), 2), dtype=np.float32)
     accuracy = 0.0
+    si = 0
+
+    model.eval()
     with torch.no_grad():
         for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(dataloader):
             # set test batch
@@ -148,4 +151,14 @@ def sentiment_analysis(model_path, corpus_path, sentence_idx, label_idx, opt=DEF
             # test accuracy
             accuracy += calculate_accuracy(out, label)
 
-    print("accuracy {}".format(accuracy / (batch_id + 1)))
+            ei = si + label.size()[0]
+            result[si:ei, :] = out.cpu().numpy()
+            si = ei
+
+            if show and batch_id % opt["log_interval"] == 0:
+                print("Predict {}%".format(round(si / len(bert_dataset) * 100, 2)))
+        accuracy = accuracy / (batch_id + 1)
+
+    return result, accuracy
+
+
