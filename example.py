@@ -115,6 +115,7 @@ def ex__training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 def ex__sentiment_analysis():
     _, corpus_path = loader.download_corpus_data()  # Naver sentiment movie corpus v1.0
     result, accuracy = md.sentiment_analysis(example_model_path, corpus_path, sentence_idx=1, label_idx=2, show=True)
+    print(f"Sentiment Analysis Accuracy: {'%0.2f' % accuracy * 100}%")
 
     dataset = nlp.data.TSVDataset(corpus_path, field_indices=[1, 2], num_discard_samples=1)
     corpus_list = []
@@ -171,6 +172,8 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
     # model
     model = md.BERTClassifier(bert_model, dr_rate=opt["drop_out_rate"]).to(device)
+    model.load_state_dict(torch.load(example_model_path))
+    model = md.ABSAClassifier(bert_model, dr_rate=opt["drop_out_rate"]).to(device)
 
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
@@ -247,7 +250,7 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
                 test_accuracy += md.calculate_accuracy(out, label)
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
-        torch.save(model.state_dict(), example_model_path)
+        torch.save(model.state_dict(), "ABSA_model.pt")
 
 
 if __name__ == '__main__':

@@ -73,6 +73,41 @@ class BERTClassifier(torch.nn.Module):
         return out
 
 
+class ABSAClassifier(torch.nn.Module):
+    def __init__(self,
+                 bert,
+                 hidden_size=768,
+                 num_classes=2,
+                 dr_rate=None,
+                 ):
+        super(ABSAClassifier, self).__init__()
+        self.bert = bert
+        self.num_classes = num_classes
+        self.dr_rate = dr_rate
+
+        self.classifier_1 = torch.nn.Linear(hidden_size, num_classes)
+        self.classifier_2 = torch.nn.Linear(hidden_size, num_classes)
+
+        if dr_rate:
+            self.dropout_1 = torch.nn.Dropout(p=dr_rate)
+            self.dropout_2 = torch.nn.Dropout(p=dr_rate)
+
+    def forward(self, x, segment_ids, attention_mask):
+        # bert forward
+        with torch.no_grad():
+            _, pooler = self.bert(inputs_embeds=x, token_type_ids=segment_ids.long(),
+                                  attention_mask=attention_mask)
+
+        # drop-out layer
+        out_1 = self.dropout_1(pooler) if self.dr_rate else pooler
+
+        # softmax output
+        out_1 = self.classifier_1(out_1)
+        out_1 = torch.nn.functional.softmax(out_1, dim=1)
+
+        return out_1
+
+
 def calculate_accuracy(x, y):
     max_vals, max_indices = torch.max(x, 1)
     train_acc = (max_indices == y).sum().data.cpu().numpy() / max_indices.size()[0]
