@@ -2,11 +2,10 @@
 #  https://github.com/e9t/nsmc
 
 import os
-from urllib.request import urlretrieve
+from urllib.request import urlretrieve, urlopen
 
 train_data_url = "https://github.com/e9t/nsmc/raw/master/ratings_train.txt"
 test_data_url = "https://github.com/e9t/nsmc/raw/master/ratings_test.txt"
-
 corpus_data_dir_name = "corpus"
 train_data_name = "ratings_train.txt"
 test_data_name = "ratings_test.txt"
