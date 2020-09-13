@@ -31,3 +31,4 @@ def download_corpus_data():
         urlretrieve(test_data_url, test_data_path)
 
     return train_data_path, test_data_path
+
