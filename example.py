@@ -9,8 +9,8 @@ import transformers
 import numpy as np
 import random
 
-sa_model_path = "example_model.pt"
-absa_model_path = "example_ABSA_model.pt"
+sa_model_path = "model.pt"
+absa_model_path = "ABSA_model.pt"
 
 
 def ex__training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
@@ -328,7 +328,7 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
-        torch.save(model.state_dict(), "example_ABSA_model.pt")
+        torch.save(model.state_dict(), "ABSA_model.pt")
 
 
 def ex__ABSA(model_path=absa_model_path, opt=md.DEFAULT_OPTION, ctx="cuda:0"):
