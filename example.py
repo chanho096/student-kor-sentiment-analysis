@@ -139,7 +139,8 @@ def ex__sentiment_analysis():
 
 def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     device = torch.device(ctx)
-
+    random.seed(3)
+    np.random.seed(3)
     # load dataset
     total_dataset = nlp.data.TSVDataset("sentiment_dataset.csv", field_indices=[0, 1, 3], num_discard_samples=1)
     test_count = int(len(total_dataset) * 0.2)  # validation ratio = 0.2
@@ -242,7 +243,7 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
     # aspect-base sentiment analysis model
     sa_model = md.BERTClassifier(bert_model, dr_rate=opt["drop_out_rate"]).to(device)
-    sa_model.load_state_dict(torch.load(sa_model_path))
+    # sa_model.load_state_dict(torch.load(sa_model_path))
     model = md.ABSAClassifier(sa_model.bert, sa_model.classifier,
                               dr_rate_0=opt["drop_out_rate"], dr_rate_1=opt["ABSA_drop_out_rate"]).to(device)
 
@@ -361,11 +362,60 @@ def ex__ABSA(model_path=absa_model_path, opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             print(out_1, out_2)
 
 
+def ex__cosine_similarity(model_path=absa_model_path, ctx="cuda:0"):
+    model = md.ABSAModel(ctx)
+    model.load_kobert()
+    model.load_model(model_path)
+
+    MOVIE_ASPECT = ["연기", "배우", "스토리", "액션", "감정", "연출", "반전", "음악", "규모"]
+    sentence_info = model.tokenize(MOVIE_ASPECT)
+    x = model.word_embedding(sentence_info)
+    asp = x[:, 1, :]  # LEN * H
+    asp_norm = np.linalg.norm(asp, ord=None, axis=1).reshape((1, -1))
+
+    word_list = [char for char in model.vocab.idx_to_token]
+    dataloader = torch.utils.data.DataLoader(word_list, batch_size=128, num_workers=0)
+    cosine_sim = np.zeros((len(word_list), len(MOVIE_ASPECT)), dtype=np.float)
+    idx = 0
+
+    with torch.no_grad():
+        for batch_id, words in enumerate(dataloader):
+            batch_count = len(words)
+
+            # set test batch
+            sentence_info = model.tokenize(words)
+            x = model.word_embedding(sentence_info)
+            w = x[:, 1, :]  # B * H
+
+            w_norm = np.linalg.norm(w, ord=None, axis=1).reshape((-1, 1))
+            sim = np.dot(w, asp.T)  # B * LEN
+            sim = np.divide(sim, w_norm)
+            sim = np.divide(sim, asp_norm)
+
+            cosine_sim[idx:idx+batch_count, :] = sim
+            idx = idx + batch_count
+
+    top_count = 30
+    sim_texts = []
+
+    for asp_idx, aspect in enumerate(MOVIE_ASPECT):
+        sim_text = [aspect]
+        cosine_rank = cosine_sim[:, asp_idx]
+        cosine_rank = np.argsort(cosine_rank)[::-1]
+        for i in range(0, top_count):
+            sim_text.append(model.vocab.idx_to_token[cosine_rank[i]])
+        sim_texts.append(sim_text)
+
+    sim_texts = np.array(sim_texts, dtype=np.str)
+    np.savetxt("similar_word.txt", sim_texts, fmt="%s", delimiter=" ", encoding='UTF-8')
+
+
 if __name__ == '__main__':
     # ex__training()
     # ex__sentiment_analysis()
     # ex__ABSA_training()
-    ex__ABSA()
+    # ex__ABSA()
+    ex__cosine_similarity()
 
 
 

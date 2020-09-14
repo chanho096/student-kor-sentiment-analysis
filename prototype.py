@@ -6,10 +6,18 @@ from crawler.utils import MovieCrawler
 
 import logging
 import numpy as np
-import os
 import sys
 
-MOVIE_ASPECT = ["연기", "배우", "스토리", "액션", "감동", "연출", "반전", "사운드", "스케일"]
+MOVIE_ASPECT = ["연기", "배우", "스토리", "액션", "감정", "연출", "반전", "음악", "규모"]
+SIM_WORD_LIST = [["연기", "연극", "공연"],
+                 ["배우", "캐스팅", "모델"],
+                 ["스토리", "이야기", "시나리오", "콘텐츠", "에피소드", "전개"],
+                 ["액션", "전투", "싸움"],
+                 ["감정", "감성", "심리"],
+                 ["연출", "촬영", "편집"],
+                 ["반전", "역전", "전환"],
+                 ["음악", "노래", "사운드", "음향"],
+                 ["규모", "스케일", "크기"]]
 
 ABSA_model_path = "ABSA_model.pt"
 daum_movie_url = "https://movie.daum.net/main/new#slide-1-0"
@@ -25,9 +33,12 @@ def _aspect_mask_to_corpus(corpus_list, opt):
     mask = [opt["object_text_0"], opt["object_text_1"]]
 
     for corpus_idx, corpus in enumerate(corpus_list):
-        asp = np.zeros((len(MOVIE_ASPECT), 1), dtype=np.int32)
-        for idx, aspect in enumerate(MOVIE_ASPECT):
-            asp[idx] = corpus.find(aspect)
+        asp = np.zeros((len(SIM_WORD_LIST), 1), dtype=np.int32)
+        for idx, aspect_list in enumerate(SIM_WORD_LIST):
+            for aspect in aspect_list:
+                asp[idx] = corpus.find(aspect)
+                if asp[idx] != -1:
+                    break
         asp[asp != -1] = 1
         asp[asp == -1] = 0
 
@@ -118,7 +129,7 @@ def daum_review_analyze():
               f"({'%0.2f' % (ratio[idx]*100 if ratio[idx] > 0.5 else (1 - ratio[idx])*100)}%)")
 
     # Target Review
-    print("\n### Target Review: 관심 있는 측면에 대한 리뷰 정보를 출력")
+    print("\n### Target Review: 관심 있는 측면에 대한 리뷰 분석 결과를 출력")
     print("### Aspect: [", end="")
     for aspect in MOVIE_ASPECT[:-1]:
         print("{}".format(aspect), end=", ")
@@ -136,7 +147,7 @@ def daum_review_analyze():
     target_reviews = np.where(review_matrix[:, aspect_idx] != 0)[0]
     np.random.shuffle(target_reviews)
     review_count = min(total_count[aspect_idx], 5)
-    print(f"\n### \"{MOVIE_ASPECT[aspect_idx]}\" 관련 리뷰 무작위 {review_count}개 출력")
+    print(f"\n### \"{MOVIE_ASPECT[aspect_idx]}\" 관련 리뷰 무작위 {review_count}개 분석 결과 출력")
     for i in range(0, review_count):
         print(f"### Review 1. ({'긍정적' if review_matrix[target_reviews[i]][aspect_idx] > 0 else '부정적'})"
               f" \"{corpus_list[target_reviews[i]]}\"")

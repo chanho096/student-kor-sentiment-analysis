@@ -346,10 +346,12 @@ class ABSAModel:
         token_list = []
         for sentence in sentence_info:
             token_list.append(sentence[0])
-        token_ids = token_list.long().to(self.device)
+
+        token_ids = torch.tensor(token_list).long().to(self.device)
 
         # word embedding
         x = self.bert_embedding(token_ids)
+        x = x.detach().cpu().numpy()
 
         return x
 
