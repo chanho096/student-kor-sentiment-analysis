@@ -65,14 +65,16 @@ def daum_review_analyze():
 
     # input url
     print("\n##### [2020 국어 정보 처리 시스템 경진 대회 출품작]")
-    print("##### Aspect-based Sentiment Analysis 를 이용한 영화 리뷰 분석 시스템\n")
-    print("DAUM 영화 홈페이지: {}".format(daum_movie_url))
+    print("##### Aspect-based Sentiment Analysis 를 이용한 영화 리뷰 분석 시스템")
+    print("##### 2020-09-14, Team 리프 - 최찬호, 고대훈")
 
+    print("\nDAUM 영화 홈페이지: {}".format(daum_movie_url))
     url = input("영화 메인 URL 입력: ")
+    print("영화 리뷰 데이터를 가져오는 중...")
     crawl_data = crawler.crawl(url)
-    print("영화 리뷰 데이터 크롤링 성공\n")
+    print("영화 리뷰 데이터 크롤링 성공")
 
-    print("### 영화 제목: [ {} ]".format(crawl_data[0]))
+    print("\n### 영화 제목: [ {} ]".format(crawl_data[0]))
 
     # get corpus list
     corpus_list = crawl_data[1]
@@ -109,12 +111,35 @@ def daum_review_analyze():
 
     # Top 3 aspect information
     asp_rank = np.argsort(total_count)[::-1]
-    print("")
-    print("### Top 3 Aspect: 영화 리뷰에 가장 많이 발견된 측면에 대하여 감성 분석")
+    print("\n### Top 3 Aspect: 영화 리뷰에 가장 많이 발견된 측면에 대하여 감성 분석")
     for i in range(0, 3):
         idx = asp_rank[i]
         print(f"### {i + 1}. {MOVIE_ASPECT[idx]}: {'긍정적' if ratio[idx] > 0.5 else '부정적'} "
               f"({'%0.2f' % (ratio[idx]*100 if ratio[idx] > 0.5 else (1 - ratio[idx])*100)}%)")
+
+    # Target Review
+    print("\n### Target Review: 관심 있는 측면에 대한 리뷰 정보를 출력")
+    print("### Aspect: [", end="")
+    for aspect in MOVIE_ASPECT[:-1]:
+        print("{}".format(aspect), end=", ")
+    print("{}]".format(MOVIE_ASPECT[-1]))
+
+    aspect_idx = -1
+    while aspect_idx == -1:
+        keyword = input("### 검색 키워드 입력: ",)
+        
+        for idx, aspect in enumerate(MOVIE_ASPECT):
+            if aspect == keyword:
+                aspect_idx = idx
+                break
+
+    target_reviews = np.where(review_matrix[:, aspect_idx] != 0)[0]
+    np.random.shuffle(target_reviews)
+    review_count = min(total_count[aspect_idx], 5)
+    print(f"\n### \"{MOVIE_ASPECT[aspect_idx]}\" 관련 리뷰 무작위 {review_count}개 출력")
+    for i in range(0, review_count):
+        print(f"### Review 1. ({'긍정적' if review_matrix[target_reviews[i]][aspect_idx] > 0 else '부정적'})"
+              f" \"{corpus_list[target_reviews[i]]}\"")
 
 
 if __name__ == '__main__':
