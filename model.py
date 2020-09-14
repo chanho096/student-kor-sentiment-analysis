@@ -32,7 +32,7 @@ class BERTDataset(torch.utils.data.Dataset):
         transform = nlp.data.BERTSentenceTransform(
             bert_tokenizer, max_seq_length=max_len, pad=pad, pair=pair)
         self.sentence = [transform([record[sentence_idx]]) for record in dataset]
-        self.labels = [np.array(record[label_idx],dtype=np.float) for record in dataset]
+        self.labels = [np.array(record[label_idx], dtype=np.int32) for record in dataset]
 
     def __getitem__(self, i):
         return self.sentence[i] + (self.labels[i],)
@@ -77,7 +77,7 @@ class ABSAClassifier(torch.nn.Module):
                  bert,
                  sa_classifier,
                  hidden_size=768,
-                 num_classes=2,
+                 num_classes=3,
                  dr_rate_0=None,
                  dr_rate_1=None,
                  ):
@@ -87,7 +87,10 @@ class ABSAClassifier(torch.nn.Module):
         self.dr_rate_0 = dr_rate_0
         self.dr_rate_1 = dr_rate_1
 
-        self.classifier_0 = sa_classifier
+        if sa_classifier:
+            self.classifier_0 = sa_classifier
+        else:
+            self.classifier_0 = torch.nn.Linear(hidden_size, 2)
         self.classifier_1 = torch.nn.Linear(hidden_size, num_classes)
         self.classifier_2 = torch.nn.Linear(hidden_size, num_classes)
 
@@ -102,17 +105,16 @@ class ABSAClassifier(torch.nn.Module):
         _, pooler = self.bert(inputs_embeds=x, token_type_ids=segment_ids.long(),
                               attention_mask=attention_mask)
 
-        # drop-out layer
         out_0 = None
         out_1 = None
         out_2 = None
 
-        if sa:
+        if sa:  # sentiment analysis
             out_0 = self.dropout_0(pooler) if self.dr_rate_0 else pooler
             out_0 = self.classifier_0(out_0)
             out_0 = torch.nn.functional.softmax(out_0, dim=1)
 
-        if absa:
+        if absa:  # aspect-base sentiment analysis
             out_1 = self.dropout_1(pooler) if self.dr_rate_1 else pooler
             out_1 = self.classifier_1(out_1)
             out_1 = torch.nn.functional.softmax(out_1, dim=1)
