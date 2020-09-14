@@ -122,7 +122,7 @@ class ABSAClassifier(torch.nn.Module):
             out_0 = self.classifier_0(out_0)
             out_0 = torch.nn.functional.softmax(out_0, dim=1)
 
-        if absa:  # aspect-base sentiment analysis
+        if absa:  # aspect-based sentiment analysis
             out_1 = self.dropout_1(pooler) if self.dr_rate_1 else pooler
             out_1 = self.classifier_1(out_1)
             out_1 = torch.nn.functional.softmax(out_1, dim=1)
@@ -230,7 +230,7 @@ def sentiment_analysis(model_path, corpus_path, sentence_idx, label_idx, opt=DEF
 
 class ABSAModel:
     """
-        사전 학습된 Aspect-Base Sentiment Analysis Model 인터페이스
+        사전 학습된 Aspect-Based Sentiment Analysis Model 인터페이스
 
         ABSA Model 을 파일로부터 불러올 수 있다.
 
@@ -362,7 +362,7 @@ class ABSAModel:
             ##### parms info #####
             x: tensor of embedded word
             sa: whether to perform sentiment analysis
-            absa: whether to perform aspect-base sentiment analysis
+            absa: whether to perform aspect-based sentiment analysis
             batch_size: evaluation batch size
         """
         if not self._state:

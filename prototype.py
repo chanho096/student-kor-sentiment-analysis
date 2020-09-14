@@ -9,7 +9,7 @@ import numpy as np
 import sys
 
 MOVIE_ASPECT = ["연기", "배우", "스토리", "액션", "감정", "연출", "반전", "음악", "규모"]
-SIM_WORD_LIST = [["연기", "연극", "공연"],
+SIM_WORD_LIST = [["연기", "연극"],
                  ["배우", "캐스팅", "모델"],
                  ["스토리", "이야기", "시나리오", "콘텐츠", "에피소드", "전개"],
                  ["액션", "전투", "싸움"],
@@ -145,7 +145,7 @@ def daum_review_analysis():
     # create review-aspect matrix
     review_matrix = np.zeros((len(corpus_list), len(MOVIE_ASPECT)), dtype=np.int32)
 
-    # aspect-base sentiment analysis
+    # aspect-based sentiment analysis
     sentence_info = model.tokenize(masked_corpus_list)
     _, result_1, result_2 = model.analyze(sentence_info, sa=False, absa=True)
     result_1 = np.argmax(result_1, axis=1)
@@ -160,7 +160,7 @@ def daum_review_analysis():
         if aspect_2 != -1:
             review_matrix[review_idx][aspect_2] = result_2[idx] - 1
 
-    # aspect-base review analysis
+    # aspect-based review analysis
     total_count = np.abs(review_matrix).sum(axis=0)
     pos_count = review_matrix.copy()
     pos_count[pos_count != 1] = 0
@@ -200,7 +200,7 @@ def daum_review_analysis():
     review_count = min(total_count[aspect_idx], 5)
     print(f"\n### \"{MOVIE_ASPECT[aspect_idx]}\" 관련 리뷰 무작위 {review_count}개 분석 결과 출력")
     for i in range(0, review_count):
-        print(f"### Review 1. ({'긍정적' if review_matrix[target_reviews[i]][aspect_idx] > 0 else '부정적'})"
+        print(f"### Review {i+1}. ({'긍정적' if review_matrix[target_reviews[i]][aspect_idx] > 0 else '부정적'})"
               f" \"{corpus_list[target_reviews[i]]}\"")
 
     # Custom Aspect
@@ -237,7 +237,7 @@ def daum_review_analysis():
     out_cnt = min(tc, 5)
     print(f"\n### \"{custom_aspect}\" 관련 리뷰 무작위 {out_cnt}개 분석 결과 출력")
     for i in range(0, out_cnt):
-        print(f"### Review 1. ({'긍정적' if rm[trg[i]] > 0 else '부정적'})"
+        print(f"### Review {i+1}. ({'긍정적' if rm[trg[i]] > 0 else '부정적'})"
               f" \"{corpus_list[trg[i]]}\"")
 
 

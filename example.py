@@ -241,7 +241,7 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     train_dataloader = torch.utils.data.DataLoader(dataset_train, batch_size=opt["batch_size"], num_workers=0)
     test_dataloader = torch.utils.data.DataLoader(dataset_test, batch_size=opt["batch_size"], num_workers=0)
 
-    # aspect-base sentiment analysis model
+    # aspect-based sentiment analysis model
     sa_model = md.BERTClassifier(bert_model, dr_rate=opt["drop_out_rate"]).to(device)
     # sa_model.load_state_dict(torch.load(sa_model_path))
     model = md.ABSAClassifier(sa_model.bert, sa_model.classifier,
