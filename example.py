@@ -9,7 +9,8 @@ import transformers
 import numpy as np
 import random
 
-example_model_path = "example_model.pt"
+sa_model_path = "example_model.pt"
+absa_model_path = "example_ABSA_model.pt"
 
 
 def ex__training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
@@ -53,6 +54,7 @@ def ex__training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
         # Train Batch
         model.train()
+
         for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(train_dataloader):
             optimizer.zero_grad()
 
@@ -108,12 +110,12 @@ def ex__training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
                 test_accuracy += md.calculate_accuracy(out, label)
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
-        torch.save(model.state_dict(), example_model_path)
+        torch.save(model.state_dict(), sa_model_path)
 
 
 def ex__sentiment_analysis():
     _, corpus_path = loader.download_corpus_data()  # Naver sentiment movie corpus v1.0
-    result, accuracy = md.sentiment_analysis(example_model_path, corpus_path, sentence_idx=1, label_idx=2, show=True)
+    result, accuracy = md.sentiment_analysis(sa_model_path, corpus_path, sentence_idx=1, label_idx=2, show=True)
     print(f"Sentiment Analysis Accuracy: {'%0.2f' % accuracy * 100}%")
 
     dataset = nlp.data.TSVDataset(corpus_path, field_indices=[1, 2], num_discard_samples=1)
@@ -140,19 +142,22 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
     # load dataset
     total_dataset = nlp.data.TSVDataset("sentiment_dataset.csv", field_indices=[0, 1, 3], num_discard_samples=1)
-    test_count = int(len(total_dataset) * 0.2)
+    test_count = int(len(total_dataset) * 0.2)  # validation ratio = 0.2
     train_dataset = total_dataset[test_count:]
     test_dataset = total_dataset[:test_count]
 
-    object_text_0 = "대상"
-    object_text_1 = "측면"
+    object_text_0 = opt["object_text_0"]
+    object_text_1 = opt["object_text_1"]
 
+    # --------------- DATA AUGMENTATION FOR ABSA ---------------
+    # ----------------------------------------------------------
     # data list
     train_data_list = []
     test_data_list = []
     data_list = [train_data_list, test_data_list]
     dataset_list = [train_dataset, test_dataset]
 
+    # set train / test data with data augmentation
     for didx, dataset in enumerate(dataset_list):
         pos_dataset = []
         neg_dataset = []
@@ -221,6 +226,8 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     random.shuffle(train_data_list)
     random.shuffle(test_data_list)
 
+    # ----------------- ABSA CLASSIFIER MODEL ------------------
+    # ----------------------------------------------------------
     # load bert model
     bert_model, vocab = kobert.pytorch_kobert.get_pytorch_kobert_model()
 
@@ -229,16 +236,15 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     dataset_train = md.BERTDataset(train_data_list, 0, 1, bert_tokenizer, opt["max_len"], pad=True, pair=False)
     dataset_test = md.BERTDataset(test_data_list, 0, 1, bert_tokenizer, opt["max_len"], pad=True, pair=False)
 
-    print(train_data_list[0:10])
     # data loader
     train_dataloader = torch.utils.data.DataLoader(dataset_train, batch_size=opt["batch_size"], num_workers=0)
     test_dataloader = torch.utils.data.DataLoader(dataset_test, batch_size=opt["batch_size"], num_workers=0)
 
     # aspect-base sentiment analysis model
     sa_model = md.BERTClassifier(bert_model, dr_rate=opt["drop_out_rate"]).to(device)
-    sa_model.load_state_dict(torch.load(example_model_path))
+    sa_model.load_state_dict(torch.load(sa_model_path))
     model = md.ABSAClassifier(sa_model.bert, sa_model.classifier,
-                              dr_rate_0=opt["drop_out_rate"], dr_rate_1=0.5).to(device)
+                              dr_rate_0=opt["drop_out_rate"], dr_rate_1=opt["ABSA_drop_out_rate"]).to(device)
 
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
@@ -253,6 +259,8 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     warmup_steps = int(t_total * opt["warmup_ratio"])
     scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
 
+    # ----------- ABSA CLASSIFIER MODEL TRAIN/TEST -------------
+    # ----------------------------------------------------------
     for e in range(opt["num_epochs"]):
         train_accuracy = 0.0
         test_accuracy = 0.0
@@ -287,7 +295,7 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
             accuracy_0 = md.calculate_accuracy(out_1, label[:, 0])
             accuracy_1 = md.calculate_accuracy(out_2, label[:, 1])
-            train_accuracy += ((accuracy_0 + accuracy_1) / 2)
+            train_accuracy += ((accuracy_0 + accuracy_1) / 2)  # Average of correct count
 
             if batch_id % opt["log_interval"] == 0:
                 print("epoch {} batch id {} loss {} train accuracy {}".format(e + 1, batch_id + 1,
@@ -320,29 +328,28 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
-        torch.save(model.state_dict(), "ABSA_model.pt")
+        torch.save(model.state_dict(), "example_ABSA_model.pt")
 
 
-def ex__ABSA():
-    device = torch.device("cuda:0")
+def ex__ABSA(model_path=absa_model_path, opt=md.DEFAULT_OPTION, ctx="cuda:0"):
+    device = torch.device(ctx)
     bert_model, vocab = kobert.pytorch_kobert.get_pytorch_kobert_model()
 
     model = md.ABSAClassifier(bert_model, torch.nn.Linear(768, 2)).to(device)
-    model.load_state_dict(torch.load("ABSA_model.pt"))
+    model.load_state_dict(torch.load(absa_model_path))
 
-    corpus = [["오늘 밥먹었는데 정말 최고였어요. 근데 영화 대상 진짜 안좋더라구요", [1, 0]]]
+    corpus = [["오늘 밥먹었는데 정말 최고였어요. 근데 영화 대상 진짜 안좋더라구요", [0, 1]]]
     bert_tokenizer = md.get_bert_tokenizer(vocab)
-    dataset = md.BERTDataset(corpus, 0, 1, bert_tokenizer, md.DEFAULT_OPTION["max_len"], pad=True, pair=False)
+    dataset = md.BERTDataset(corpus, 0, 1, bert_tokenizer, opt["max_len"], pad=True, pair=False)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=2, num_workers=0)
 
     model.eval()
     with torch.no_grad():
-        for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(dataloader):
+        for batch_id, (token_ids, valid_length, segment_ids, _) in enumerate(dataloader):
             # set test batch
             token_ids = token_ids.long().to(device)
             segment_ids = segment_ids.long().to(device)
             valid_length = valid_length
-            label = label.long().to(device)
 
             # get word embedding
             attention_mask = md.gen_attention_mask(token_ids, valid_length)
@@ -351,7 +358,6 @@ def ex__ABSA():
 
             # forward propagation
             _, out_1, out_2 = model(x, segment_ids, attention_mask, sa=False, absa=True)
-
             print(out_1, out_2)
 
 
@@ -360,6 +366,7 @@ if __name__ == '__main__':
     # ex__sentiment_analysis()
     # ex__ABSA_training()
     ex__ABSA()
+
 
 
 
