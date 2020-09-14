@@ -9,8 +9,6 @@ import re
 hangul = re.compile('[^ ㄱ-ㅣ가-힣|0-9|a-z|A-Z]+')
 
 minLengthReview = 8
-MAXGRADE = 7
-MINGRADE = 4
 
 
 class CrawlerPipeline:
@@ -47,16 +45,11 @@ class TextPipeline(object):
         item['reviewText'][0] = re.sub(r"\s+", " ", item['reviewText'][0], flags=re.UNICODE)
         item['reviewText'][0] = item['reviewText'][0].strip(' ')
 
-        # re-lavel
-        if (len(item['reviewText'][0]) < 8) | ((int(item['reviewGrade'][0]) > MINGRADE) & (int(item['reviewGrade'][0]) < MAXGRADE)):
+        # re-label
+        if len(item['reviewText'][0]) < 8:
             pass
         else:
-            if int(item['reviewGrade'][0]) < MAXGRADE:
-                item['reviewGrade'][0] = 0
-            else:
-                item['reviewGrade'][0] = 1
-
-            smallTextGradeWraper = [item['reviewText'][0], item['reviewGrade'][0]]
+            smallTextGradeWraper = item['reviewText'][0]
             self.bigTextGradeWraper.append(smallTextGradeWraper)
 
             # export to csv
