@@ -74,6 +74,10 @@ def corpus_analysis():
     print("##### 2020-09-14, Team 리프")
 
     while True:
+        print("### Aspect: [", end="")
+        for aspect in MOVIE_ASPECT[:-1]:
+            print("{}".format(aspect), end=", ")
+        print("{}]".format(MOVIE_ASPECT[-1]))
         corpus = input("### 분석 말뭉치 입력: ")
         if corpus == "":
             break
@@ -243,7 +247,18 @@ def daum_review_analysis():
 
 if __name__ == '__main__':
     # logging.disable(sys.maxsize)
-    daum_review_analysis()
-    # corpus_analysis()
+    print("[A]: Corpus Analysis")
+    print("[B]: DAUM Moview Review Analysis")
+    while True:
+        key = input("### 분석 모드 선택: ")
+        if key == 'A' or 'B':
+            break
+
+    print("")
+    if key == 'A':
+        corpus_analysis()
+    else:
+        daum_review_analysis()
+
 
 
