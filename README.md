@@ -22,7 +22,8 @@ pip install -r requirements.txt
 
 ### 모델 파일 경로
 실행 경로에 ABSA_model.pt 파일이 존재해야 합니다.   
-   
+( BERT + Sentiment Analysis Classifier + Aspect-based Sentiment Analysis Classifier )
+
 
 ### 모듈 설명
 example.py - 모델 학습, 데이터 생성 등에 대한 예시 소스 코드 입니다.   
@@ -31,3 +32,10 @@ model.py - ABSA Model 인터페이스 클래스가 구현되어 있습니다.
 loader.py - Naver sentiment movie corpus 데이터를 불러옵니다.   
 
 
+### Docker 실행
+Docker Image 생성 및 프로그램 실행
+```
+docker build -t sentiment_analysis:latest .
+docker run --rm -it sentiment_analysis /bin/bash
+python3.7 prototype.py
+```
