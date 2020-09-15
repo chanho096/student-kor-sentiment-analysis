@@ -243,7 +243,7 @@ def daum_review_analysis():
 
 if __name__ == '__main__':
     # logging.disable(sys.maxsize)
-    # daum_review_analysis()
-    corpus_analysis()
+    daum_review_analysis()
+    # corpus_analysis()
 
 
