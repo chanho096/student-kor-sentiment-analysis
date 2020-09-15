@@ -81,26 +81,28 @@ def corpus_analysis():
 
         # create masked corpus
         masked_corpus_list, masked_corpus_info = _aspect_mask_to_corpus([corpus], model.opt)
-
-        # aspect-base sentiment analysis
-        sentence_info = model.tokenize(masked_corpus_list)
-        _, result_1, result_2 = model.analyze(sentence_info, sa=False, absa=True)
-
-        result_label_1 = np.argmax(result_1, axis=1)
-        result_label_2 = np.argmax(result_2, axis=1)
-        result_1 = np.max(result_1, axis=1)
-        result_2 = np.max(result_2, axis=1)
-
-        # get result
         result = np.zeros((len(MOVIE_ASPECT), 1), dtype=np.float)
-        result_label = np.zeros((len(MOVIE_ASPECT), 1), dtype=np.int32)
-        for idx, (_, aspect_1, aspect_2) in enumerate(masked_corpus_info):
-            if aspect_1 != -1:
-                result[aspect_1] = result_1[idx]
-                result_label[aspect_1] = result_label_1[idx] - 1
-            if aspect_2 != -1:
-                result[aspect_2] = result_2[idx]
-                result_label[aspect_2] = result_label_2[idx] - 1
+
+        if len(masked_corpus_list > 0):
+            # aspect-base sentiment analysis
+            sentence_info = model.tokenize(masked_corpus_list)
+            _, result_1, result_2 = model.analyze(sentence_info, sa=False, absa=True)
+
+            result_label_1 = np.argmax(result_1, axis=1)
+            result_label_2 = np.argmax(result_2, axis=1)
+            result_1 = np.max(result_1, axis=1)
+            result_2 = np.max(result_2, axis=1)
+
+            # get result
+
+            result_label = np.zeros((len(MOVIE_ASPECT), 1), dtype=np.int32)
+            for idx, (_, aspect_1, aspect_2) in enumerate(masked_corpus_info):
+                if aspect_1 != -1:
+                    result[aspect_1] = result_1[idx]
+                    result_label[aspect_1] = result_label_1[idx] - 1
+                if aspect_2 != -1:
+                    result[aspect_2] = result_2[idx]
+                    result_label[aspect_2] = result_label_2[idx] - 1
 
         print("\n### 감성 분석 결과")
         if np.sum(np.abs(result_label)) == 0:
