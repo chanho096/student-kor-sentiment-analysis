@@ -83,7 +83,7 @@ def corpus_analysis():
         result_label = np.zeros((len(MOVIE_ASPECT), 1), dtype=np.int32)
         result = np.zeros((len(MOVIE_ASPECT), 1), dtype=np.float)
 
-        if len(masked_corpus_list > 0):
+        if len(masked_corpus_list) > 0:
             # aspect-base sentiment analysis
             sentence_info = model.tokenize(masked_corpus_list)
             _, result_1, result_2 = model.analyze(sentence_info, sa=False, absa=True)
@@ -243,7 +243,7 @@ def daum_review_analysis():
 
 if __name__ == '__main__':
     # logging.disable(sys.maxsize)
-    daum_review_analysis()
-    # corpus_analysis()
+    # daum_review_analysis()
+    corpus_analysis()
 
 
