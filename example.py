@@ -9,6 +9,7 @@ import transformers
 import numpy as np
 import random
 
+
 sa_model_path = "model.pt"
 absa_model_path = "ABSA_model.pt"
 
@@ -410,18 +411,12 @@ def ex__cosine_similarity(model_path=absa_model_path, ctx="cuda:0"):
     np.savetxt("similar_word.txt", sim_texts, fmt="%s", delimiter=" ", encoding='UTF-8')
 
 
-def ex__movie_analysis(model_path=absa_model_path, ctx="cuda:0"):
-    model = md.ABSAModel(ctx)
-    model.load_kobert()
-    model.load_model(model_path)
-
-
 if __name__ == '__main__':
     # ex__training()
     # ex__sentiment_analysis()
     # ex__ABSA_training()
-    # ex__ABSA()
-    ex__cosine_similarity()
+    ex__ABSA()
+    # ex__cosine_similarity()
 
 
 
