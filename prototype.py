@@ -6,7 +6,6 @@ from crawler.utils import MovieCrawler
 
 import logging
 import numpy as np
-import sys
 
 MOVIE_ASPECT = ["연기", "배우", "스토리", "액션", "감정", "연출", "반전", "음악", "규모"]
 SIM_WORD_LIST = [["연기", "연극"],
@@ -63,6 +62,7 @@ def _aspect_mask_to_corpus(corpus_list, opt, aspect_set=SIM_WORD_LIST):
             idx = idx + 2
 
     return masked_corpus_list, masked_corpus_info
+
 
 def corpus_analysis():
     # create ABSA model
@@ -239,13 +239,6 @@ def daum_review_analysis():
     for i in range(0, out_cnt):
         print(f"### Review {i+1}. ({'긍정적' if rm[trg[i]] > 0 else '부정적'})"
               f" \"{corpus_list[trg[i]]}\"")
-
-    # Movie Recommend
-    print("\n\n### Movie Recommend: 사용자 관심 측면을 기준으로 영화 추천")
-    custom_aspect = input("### 관심 측면 입력: ")
-    print(f"### \"{custom_aspect}\" 다음 영화 분석 데이터 준비중...")
-    movie_info = np.load("daum_movie_info.npy")
-    movie_name = np.load("duam_movie_name.npy")
 
 
 if __name__ == '__main__':
