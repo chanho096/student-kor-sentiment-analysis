@@ -20,7 +20,7 @@ pip install -r requirements.txt
 2.  한국경영학회, 감성분석을 위한 온라인 상품평 데이터 ( http://www.drbr.or.kr/datasets/view/?seq=20 )   
    
 
-### 모델 파일 다운로드
+### 모델 파일 경로
 실행 경로에 ABSA_model.pt 파일이 존재해야 합니다.   
    
 
