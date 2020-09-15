@@ -17,7 +17,7 @@ pip install -r requirements.txt
 ```
 
 ### 모델 파일 경로
-실행 경로에 ABSA_model.pt 파일이 존재해야 합니다.
+실행 경로에 ABSA_model.pt 파일이 존재해야 합니다.   
 해당 모델 파일은 KO-BERT를 기반으로 학습된 모델입니다. ( https://github.com/SKTBrain/KoBERT )   
 KO-BERT + Sentiment Analysis Classifier + Aspect-based Sentiment Analysis Classifier   
    
