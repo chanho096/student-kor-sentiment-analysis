@@ -35,9 +35,12 @@ loader.py - Naver sentiment movie corpus 데이터를 불러옵니다.
 
 
 ### 도커 실행 예제
-도커 이미지 생성 및 프로그램 실행
+아나콘다 명령 프롬프트에서 실행
 ```
 docker build -t sentiment_analysis:latest .
 docker run --rm -it sentiment_analysis /bin/bash
+```
+도커 컨테이너 내부 Ubuntu 에서 실행
+```
 python3.7 prototype.py
 ```
