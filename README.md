@@ -3,11 +3,13 @@
 사전 학습된 KO-BERT ( https://github.com/SKTBrain/KoBERT ) 모델을 활용한 감성 분석 시스템 입니다.   
 탐색하고자 하는 주요 단어들을 지정하고, 지정된 단어에 대한 감성 분석을 실행할 수 있습니다.
 
+## 시스템 설명 및 실행 영상
+https://www.youtube.com/watch?v=oIibK6Oc1OA
 
 ## 프로그램 설치
 requirements.txt 파일에 라이브러리 목록이 저장되어 있습니다.   
 
-windows 환경에서 pytorch 설치 시, 다음 사이트를 참조 바랍니다.   
+Windows 환경에서 pytorch 설치 시, 다음 사이트를 참조 바랍니다.   
 ( https://pytorch.org/get-started/locally/ )
 
 ```
@@ -32,8 +34,8 @@ model.py - ABSA Model 인터페이스 클래스가 구현되어 있습니다.
 loader.py - Naver sentiment movie corpus 데이터를 불러옵니다.   
 
 
-### Docker 실행
-Docker Image 생성 및 프로그램 실행
+### 도커 실행 예제
+도커 이미지 생성 및 프로그램 실행
 ```
 docker build -t sentiment_analysis:latest .
 docker run --rm -it sentiment_analysis /bin/bash
