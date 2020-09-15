@@ -291,7 +291,7 @@ class ABSAModel:
         model = ABSAClassifier(self.bert_model).to(self.device)
 
         # load model parameter
-        model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_path, map_location=self.device))
 
         # ready to analyze
         self.model = model

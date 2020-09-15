@@ -64,9 +64,9 @@ def _aspect_mask_to_corpus(corpus_list, opt, aspect_set=SIM_WORD_LIST):
     return masked_corpus_list, masked_corpus_info
 
 
-def corpus_analysis():
+def corpus_analysis(ctx="cuda0"):
     # create ABSA model
-    model = ABSAModel()
+    model = ABSAModel(ctx=ctx)
     model.load_kobert()
     model.load_model(ABSA_model_path)
 
@@ -118,12 +118,12 @@ def corpus_analysis():
         print("\n--------------------------------------")
 
 
-def daum_review_analysis():
+def daum_review_analysis(ctx="cuda:0"):
     # create movie crawler
     crawler = MovieCrawler()
 
     # create ABSA model
-    model = ABSAModel()
+    model = ABSAModel(ctx=ctx)
     model.load_kobert()
     model.load_model(ABSA_model_path)
 
@@ -247,18 +247,31 @@ def daum_review_analysis():
 
 if __name__ == '__main__':
     # logging.disable(sys.maxsize)
+    print("### CUDA GPU 프로세서를 사용합니까?")
+    print("[A]: Yes")
+    print("[B]: No")
+    while True:
+        key = input("### Press \'A\' or \'B\': ")
+        if key == 'A' or key == 'B':
+            break
+    if key == 'A':
+        ctx = "cuda:0"
+    else:
+        ctx = "cpu"
+
+    print("\n### 분석 종류를 선택하십시오.")
     print("[A]: Corpus Analysis")
     print("[B]: DAUM Moview Review Analysis")
     while True:
-        key = input("### 분석 모드 선택: ")
-        if key == 'A' or 'B':
+        key = input("### Press \'A\' or \'B\': ")
+        if key == 'A' or key == 'B':
             break
 
     print("")
     if key == 'A':
-        corpus_analysis()
+        corpus_analysis(ctx=ctx)
     else:
-        daum_review_analysis()
+        daum_review_analysis(ctx=ctx)
 
 
 
