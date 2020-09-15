@@ -248,77 +248,9 @@ def daum_review_analysis():
     movie_name = np.load("duam_movie_name.npy")
 
 
-
-import csv
-def ex__movie_analysis(ctx="cuda:0"):
-    # read daum_movie_review.csv
-    with open('daum_movie_review.csv', encoding='utf-8') as rf:
-        csv_reader = csv.reader(rf)
-        products_list = list(csv_reader)
-
-    total_list = []
-    movie_list = []
-    text_list = []
-    for i in range(0, len(products_list)):
-        products_list[i][0], products_list[i][1] = products_list[i][1], products_list[i][0]
-
-    for i in range(0, len(products_list) - 1):
-        if products_list[i][0] == products_list[i + 1][0]:
-            text_list.append(str(products_list[i][1]))
-        else:
-            text_list.append(str(products_list[i][1]))
-            movie_list.append(str(products_list[i][0]))
-            movie_list.append(text_list)
-            total_list.append(movie_list)
-            text_list = []
-            movie_list = []
-    total_list = total_list[1:]
-
-    # load model
-    model = ABSAModel(ctx)
-    model.load_kobert()
-    model.load_model(ABSA_model_path)
-
-    # analysis
-    movie_info = np.zeros((len(total_list), len(MOVIE_ASPECT), 2), dtype=np.float)
-    for idx, (movie, corpus_list) in enumerate(total_list):
-        movie_list.append(movie)
-        print(movie)
-
-        masked_corpus_list, masked_corpus_info = _aspect_mask_to_corpus(corpus_list, model.opt)
-        review_matrix = np.zeros((len(corpus_list), len(MOVIE_ASPECT)), dtype=np.int32)
-        sentence_info = model.tokenize(masked_corpus_list)
-        _, result_1, result_2 = model.analyze(sentence_info, sa=False, absa=True)
-        result_1 = np.argmax(result_1, axis=1)
-        result_2 = np.argmax(result_2, axis=1)
-
-        # write review-aspect matrix
-        for idx, (review_idx, aspect_1, aspect_2) in enumerate(masked_corpus_info):
-            # ABSA Classifier Label: [0:neg, 1:null, 2:pos]
-            # Review-Aspect Matrix: [-1:neg, 0:null, 1:pos]
-            if aspect_1 != -1:
-                review_matrix[review_idx][aspect_1] = result_1[idx] - 1
-            if aspect_2 != -1:
-                review_matrix[review_idx][aspect_2] = result_2[idx] - 1
-
-        # aspect-based review analysis
-        total_count = np.abs(review_matrix).sum(axis=0)
-        pos_count = review_matrix.copy()
-        pos_count[pos_count != 1] = 0
-        pos_count = np.count_nonzero(pos_count, axis=0)
-        ratio = pos_count / total_count
-        movie_info[idx, :, 0] = ratio
-        movie_info[idx, :, 1] = total_count
-
-    movie_name = np.array(movie_list, dtype=np.str)
-    np.save("daum_movie_info.npy", movie_info)
-    np.save("daum_movie_name.npy", movie_name)
-
-
 if __name__ == '__main__':
     # logging.disable(sys.maxsize)
-    # daum_review_analysis()
+    daum_review_analysis()
     # corpus_analysis()
-    ex__movie_analysis()
 
 
