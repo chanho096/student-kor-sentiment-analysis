@@ -6,6 +6,9 @@
 ## 시스템 설명 및 실행 영상
 https://www.youtube.com/watch?v=oIibK6Oc1OA
 
+### 도커 허브   
+https://hub.docker.com/r/rhgo1749/sentiment_analysis
+
 ### 라이브러리 설치
 requirements.txt 파일에 라이브러리 목록이 저장되어 있습니다.   
 
