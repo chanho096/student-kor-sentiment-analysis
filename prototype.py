@@ -1,10 +1,10 @@
 #  2020 국어 정보 처리 시스템 경진 대회 출품작
 #  Team 리프: 영화 리뷰 분석 시스템
 
-from model import ABSAModel
+from masa.model import ABSAModel
+from masa.utils import gen_aspect_mask, create_result_matrix
 from crawler.utils import MovieCrawler
 
-import logging
 import numpy as np
 
 MOVIE_ASPECT = ["연기", "배우", "스토리", "액션", "감정", "연출", "반전", "음악", "규모"]
@@ -20,47 +20,6 @@ SIM_WORD_LIST = [["연기", "연극"],
 
 ABSA_model_path = "ABSA_model.pt"
 daum_movie_url = "https://movie.daum.net/main/new#slide-1-0"
-
-
-def _aspect_mask_to_corpus(corpus_list, opt, aspect_set=SIM_WORD_LIST):
-    """
-        말뭉치 데이터를 이용하여 ABSA 데이터 생성
-    """
-    masked_corpus_list = []
-    masked_corpus_info = []
-    mask = [opt["object_text_0"], opt["object_text_1"]]
-
-    for corpus_idx, corpus in enumerate(corpus_list):
-        asp = np.zeros((len(aspect_set), 1), dtype=np.int32)
-        for idx, aspect_list in enumerate(aspect_set):
-            for aspect in aspect_list:
-                asp[idx] = corpus.find(aspect)
-                if asp[idx] != -1:
-                    break
-        asp[asp != -1] = 1
-        asp[asp == -1] = 0
-
-        rnd_asp = np.where(asp == 1)[0]
-        idx = 0
-
-        # 홀수개의 aspect 가 존재하는 경우
-        if np.sum(asp) % 2 != 0:
-            asp_idx = rnd_asp[idx]
-            masked_corpus_list.append(corpus.replace(MOVIE_ASPECT[asp_idx], mask[0]))
-            masked_corpus_info.append([corpus_idx, asp_idx, -1])
-            idx = idx + 1
-
-        # 짝수개의 aspect 를 치환
-        while idx < rnd_asp.shape[0]:
-            asp_idx_0 = rnd_asp[idx]
-            asp_idx_1 = rnd_asp[idx + 1]
-            replaced_corpus = corpus.replace(MOVIE_ASPECT[asp_idx_0], mask[0])
-            replaced_corpus = replaced_corpus.replace(MOVIE_ASPECT[asp_idx_1], mask[1])
-            masked_corpus_list.append(replaced_corpus)
-            masked_corpus_info.append([corpus_idx, asp_idx_0, asp_idx_1])
-            idx = idx + 2
-
-    return masked_corpus_list, masked_corpus_info
 
 
 def corpus_analysis(ctx="cuda0"):
@@ -82,7 +41,8 @@ def corpus_analysis(ctx="cuda0"):
             break
 
         # create masked corpus
-        masked_corpus_list, masked_corpus_info = _aspect_mask_to_corpus([corpus], model.opt)
+        masked_corpus_list, masked_corpus_info = gen_aspect_mask([corpus], model.opt,
+                                                                 MOVIE_ASPECT, SIM_WORD_LIST)
         result_label = np.zeros((len(MOVIE_ASPECT), 1), dtype=np.int32)
         result = np.zeros((len(MOVIE_ASPECT), 1), dtype=np.float)
 
@@ -142,28 +102,10 @@ def daum_review_analysis(ctx="cuda:0"):
     # get corpus list
     corpus_list = crawl_data[1]
 
-    # create masked corpus_list
-    masked_corpus_list, masked_corpus_info = _aspect_mask_to_corpus(corpus_list, model.opt)
-
-    # create review-aspect matrix
-    review_matrix = np.zeros((len(corpus_list), len(MOVIE_ASPECT)), dtype=np.int32)
-
-    # aspect-based sentiment analysis
-    sentence_info = model.tokenize(masked_corpus_list)
-    _, result_1, result_2 = model.analyze(sentence_info, sa=False, absa=True)
-    result_1 = np.argmax(result_1, axis=1)
-    result_2 = np.argmax(result_2, axis=1)
-
-    # write review-aspect matrix
-    for idx, (review_idx, aspect_1, aspect_2) in enumerate(masked_corpus_info):
-        # ABSA Classifier Label: [0:neg, 1:null, 2:pos]
-        # Review-Aspect Matrix: [-1:neg, 0:null, 1:pos]
-        if aspect_1 != -1:
-            review_matrix[review_idx][aspect_1] = result_1[idx] - 1
-        if aspect_2 != -1:
-            review_matrix[review_idx][aspect_2] = result_2[idx] - 1
-
     # aspect-based review analysis
+    review_matrix = model.analyze_quickly(corpus_list, MOVIE_ASPECT, SIM_WORD_LIST)
+
+    # get probability
     total_count = np.abs(review_matrix).sum(axis=0)
     pos_count = review_matrix.copy()
     pos_count[pos_count != 1] = 0
@@ -211,19 +153,10 @@ def daum_review_analysis(ctx="cuda:0"):
     custom_aspect = input("### 감성 분석 주제 입력: ")
     print(f"### \"{custom_aspect}\" 감성 분석 실행...")
 
-    mcl, mci = _aspect_mask_to_corpus(corpus_list, model.opt, aspect_set=[[custom_aspect]])
-    if len(mcl) > 0:
-        rm = np.zeros((len(corpus_list), 1), dtype=np.int32)
-        si = model.tokenize(mcl)
-        _, r1, r2 = model.analyze(si, sa=False, absa=True)
-        r1 = np.argmax(r1, axis=1)
-        r2 = np.argmax(r2, axis=1)
-        for idx, (review_idx, asp_1, asp_2) in enumerate(mci):
-            if asp_1 != -1:
-                rm[review_idx][asp_1] = r1[idx] - 1
-            if asp_2 != -1:
-                rm[review_idx][asp_2] = r2[idx] - 1
+    # aspect-based review analysis
+    rm = model.analyze_quickly(corpus_list, aspects=[custom_aspect], sim_aspects=[[custom_aspect]])
 
+    # get probability
     tc = np.abs(rm).sum(axis=0)[0]
     pc = rm.copy()
     pc[pc != 1] = 0

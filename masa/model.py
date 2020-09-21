@@ -1,9 +1,9 @@
 import kobert.pytorch_kobert
 import kobert.utils
+import masa.utils
 
 import torch
 import gluonnlp as nlp
-from gluonnlp.data import TSVDataset
 import numpy as np
 
 import os
@@ -32,52 +32,6 @@ DEFAULT_OPTION = {
     "object_text_1": "측면",
     "ABSA_drop_out_rate": 0.5
 }
-
-
-class BERTDataset(torch.utils.data.Dataset):
-    def __init__(self, dataset, sentence_idx, label_idx, bert_tokenizer, max_len, pad, pair):
-        # Tokenization 수행
-        transform = nlp.data.BERTSentenceTransform(
-            bert_tokenizer, max_seq_length=max_len, pad=pad, pair=pair)
-        self.sentence = [transform([record[sentence_idx]]) for record in dataset]
-        self.labels = [np.array(record[label_idx], dtype=np.int32) for record in dataset]
-
-    def __getitem__(self, i):
-        return self.sentence[i] + (self.labels[i],)
-
-    def __len__(self):
-        return len(self.labels)
-
-
-class BERTClassifier(torch.nn.Module):
-    def __init__(self,
-                 bert,
-                 hidden_size=768,
-                 num_classes=2,
-                 dr_rate=None,
-                 ):
-        super(BERTClassifier, self).__init__()
-        self.bert = bert
-        self.num_classes = num_classes
-        self.dr_rate = dr_rate
-
-        self.classifier = torch.nn.Linear(hidden_size, num_classes)
-        if dr_rate:
-            self.dropout = torch.nn.Dropout(p=dr_rate)
-
-    def forward(self, x, segment_ids, attention_mask):
-        # bert forward
-        _, pooler = self.bert(inputs_embeds=x, token_type_ids=segment_ids.long(),
-                              attention_mask=attention_mask)
-
-        # drop-out layer
-        out = self.dropout(pooler) if self.dr_rate else pooler
-
-        # softmax output
-        out = self.classifier(out)
-        out = torch.nn.functional.softmax(out, dim=1)
-
-        return out
 
 
 class ABSAClassifier(torch.nn.Module):
@@ -152,80 +106,11 @@ def get_bert_tokenizer(vocab):
     return bert_tokenizer
 
 
-def get_bert_dataset(corpus_path, sentence_idx, label_idx, max_len, vocab=None, bert_tokenizer=None):
-    if not vocab and not bert_tokenizer:
-        # vocab or bert_tokenizer must be required
-        return None
-
-    # load train / test dataset
-    dataset = nlp.data.TSVDataset(corpus_path, field_indices=[sentence_idx, label_idx], num_discard_samples=1)
-
-    # text data pre-processing
-    if bert_tokenizer is None:
-        bert_tokenizer = get_bert_tokenizer(vocab)
-    bert_dataset = BERTDataset(dataset, 0, 1, bert_tokenizer, max_len, pad=True, pair=False)
-
-    return bert_dataset
-
-
 def gen_attention_mask(token_ids, valid_length):
     attention_mask = torch.zeros_like(token_ids)
     for i, v in enumerate(valid_length):
         attention_mask[i][:v] = 1
     return attention_mask.float()
-
-
-def sentiment_analysis(model_path, corpus_path, sentence_idx, label_idx, opt=DEFAULT_OPTION, ctx="cuda:0", show=False):
-    device = torch.device(ctx)
-
-    # load bert model
-    bert_model, vocab = kobert.pytorch_kobert.get_pytorch_kobert_model()
-
-    # data pre-processing
-    bert_dataset = get_bert_dataset(corpus_path, sentence_idx=sentence_idx, label_idx=label_idx,
-                                    max_len=opt["max_len"], vocab=vocab)
-
-    # data loader
-    dataloader = torch.utils.data.DataLoader(bert_dataset, batch_size=opt["batch_size"], num_workers=0)
-
-    # load model
-    model = BERTClassifier(bert_model).to(device)
-    model.load_state_dict(torch.load(model_path))
-
-    # evaluate
-    result = np.zeros((len(bert_dataset), 2), dtype=np.float32)
-    accuracy = 0.0
-    si = 0
-
-    model.eval()
-    with torch.no_grad():
-        for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(dataloader):
-            # set test batch
-            token_ids = token_ids.long().to(device)
-            segment_ids = segment_ids.long().to(device)
-            valid_length = valid_length
-            label = label.long().to(device)
-
-            # get word embedding
-            attention_mask = gen_attention_mask(token_ids, valid_length)
-            word_embedding = model.bert.get_input_embeddings()
-            x = word_embedding(token_ids)
-
-            # forward propagation
-            out = model(x, segment_ids, attention_mask)
-
-            # test accuracy
-            accuracy += calculate_accuracy(out, label)
-
-            ei = si + label.size()[0]
-            result[si:ei, :] = out.cpu().numpy()
-            si = ei
-
-            if show and batch_id % opt["log_interval"] == 0:
-                print("Predict {}%".format(round(si / len(bert_dataset) * 100, 2)))
-        accuracy = accuracy / (batch_id + 1)
-
-    return result, accuracy
 
 
 class ABSAModel:
@@ -420,7 +305,36 @@ class ABSAModel:
         """
         return result_0, result_1, result_2
 
+    def analyze_quickly(self, corpus_list, aspects, sim_aspects, batch_size=None):
+        """
+            masking + tokenize + analyze + create result 통합
 
+            말뭉치 데이터를 입력으로 받아서, 결과 행렬을 반환한다.
+
+            ##### parms info #####
+            corpus_list: list type - string set (input of tokenizer)
+            aspects: list type - string of aspects
+            sim_aspects: double list type - similar word dictionary
+        """
+        if not self._state:
+            logging.error("ABSAModel has not been initialized")
+            return None
+
+        # masking
+        masked_corpus_list, masked_corpus_info = masa.utils.gen_aspect_mask(corpus_list, self.opt,
+                                                                            aspects, sim_aspects)
+
+        # tokenize
+        sentence_info = self.tokenize(masked_corpus_list)
+
+        # aspect-based sentiment analysis
+        _, result_1, result_2 = self.analyze(sentence_info, sa=False, absa=True, batch_size=batch_size)
+
+        # create result matrix
+        result_matrix = masa.utils.create_result_matrix(result_1, result_2, masked_corpus_info,
+                                                        len(corpus_list), len(aspects))
+
+        return result_matrix
 
 
 
