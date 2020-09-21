@@ -25,12 +25,52 @@ EX_SIM_WORD_LIST = [["연기", "연극"],
 
 
 def _model_validation(ABSA_model):
-    corpus_list, aspect_info = loader.load_validation_data()
-    rm = ABSA_model.analyze_quickly(corpus_list, EX_SIM_WORD_LIST)
-    print(corpus_list[0:10])
-    print(rm[0:10, :])
-    print(aspect_info[0:10, :])
-    pass
+    """
+        validation set 을 이용하여 모델 정확도 계산
+    """
+    corpus_list, asp_info = loader.load_validation_data()
+
+    # split counter example
+    counter_example = np.abs(asp_info.sum(axis=1)) != (np.abs(asp_info)).sum(axis=1)
+    pos_0 = np.where(counter_example)[0]
+    pos_1 = np.where(np.logical_not(counter_example))[0]
+
+    # split corpus list
+    corpus_list_0 = []
+    corpus_list_1 = []
+    for idx in range(0, pos_0.shape[0]):
+        corpus_list_0.append(corpus_list[pos_0[idx]])
+    for idx in range(0, pos_1.shape[0]):
+        corpus_list_1.append(corpus_list[pos_1[idx]])
+
+    # split aspect info
+    asp_info_0 = asp_info[pos_0, :]
+    asp_info_1 = asp_info[pos_1, :]
+
+    split_package = [[corpus_list_0, asp_info_0], [corpus_list_1, asp_info_1]]
+    result = []
+    total_count = 0
+    hit_count = 0
+    for (cl, inf) in split_package:
+        # analysis
+        rm = ABSA_model.analyze_quickly(cl, EX_SIM_WORD_LIST)
+
+        # 전체 Aspect 정보 개수
+        sub_count = np.count_nonzero(inf)
+
+        # 적중 Aspect 정보 개수
+        sub_hit_count = np.count_nonzero(inf[inf == rm])
+
+        # 결과 저장
+        result.append([sub_hit_count, sub_count])
+        total_count = total_count + sub_count
+        hit_count = hit_count + sub_hit_count
+
+    result_0 = hit_count / total_count  # 전체 적중률
+    result_1 = result[0][0] / result[0][1]  # 대립 사례 적중률
+    result_2 = result[1][0] / result[1][1]  # 일치 사례 적중률
+
+    return result_0, result_1, result_2
 
 
 def ex__training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
