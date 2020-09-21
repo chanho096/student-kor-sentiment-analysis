@@ -305,7 +305,7 @@ class ABSAModel:
         """
         return result_0, result_1, result_2
 
-    def analyze_quickly(self, corpus_list, aspects, sim_aspects, batch_size=None):
+    def analyze_quickly(self, corpus_list, sim_aspects, batch_size=None):
         """
             masking + tokenize + analyze + create result 통합
 
@@ -321,8 +321,7 @@ class ABSAModel:
             return None
 
         # masking
-        masked_corpus_list, masked_corpus_info = masa.utils.gen_aspect_mask(corpus_list, self.opt,
-                                                                            aspects, sim_aspects)
+        masked_corpus_list, masked_corpus_info = masa.utils.gen_aspect_mask(corpus_list, self.opt, sim_aspects)
 
         # tokenize
         sentence_info = self.tokenize(masked_corpus_list)
@@ -332,7 +331,7 @@ class ABSAModel:
 
         # create result matrix
         result_matrix = masa.utils.create_result_matrix(result_1, result_2, masked_corpus_info,
-                                                        len(corpus_list), len(aspects))
+                                                        len(corpus_list), len(sim_aspects))
 
         return result_matrix
 

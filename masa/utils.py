@@ -1,16 +1,14 @@
 import numpy as np
 
 
-def gen_aspect_mask(corpus_list, opt, aspects, sim_aspects):
+def gen_aspect_mask(corpus_list, opt, sim_aspects):
     """
         말뭉치 데이터를 이용하여 ABSA Model 입력 데이터 생성
 
         ##### parms info #####
         corpus_list: list type - string set
-        aspects: list type - string of aspects
         sim_aspects: double list type - similar word dictionary
     """
-    assert(len(aspects) == len(sim_aspects))
 
     masked_corpus_list = []
     masked_corpus_info = []
@@ -18,6 +16,7 @@ def gen_aspect_mask(corpus_list, opt, aspects, sim_aspects):
 
     for corpus_idx, corpus in enumerate(corpus_list):
         asp = np.zeros((len(sim_aspects), 1), dtype=np.int32)
+
         for idx, aspect_list in enumerate(sim_aspects):
             for aspect in aspect_list:
                 asp[idx] = corpus.find(aspect)
@@ -32,7 +31,13 @@ def gen_aspect_mask(corpus_list, opt, aspects, sim_aspects):
         # 홀수개의 aspect 가 존재하는 경우
         if np.sum(asp) % 2 != 0:
             asp_idx = rnd_asp[idx]
-            masked_corpus_list.append(corpus.replace(aspects[asp_idx], mask[0]))
+            
+            # 유사어 이용 대치
+            replaced_corpus = corpus
+            for aspect in sim_aspects[asp_idx]:
+                replaced_corpus = replaced_corpus.replace(aspect, mask[0])
+
+            masked_corpus_list.append(replaced_corpus)
             masked_corpus_info.append([corpus_idx, asp_idx, -1])
             idx = idx + 1
 
@@ -40,8 +45,14 @@ def gen_aspect_mask(corpus_list, opt, aspects, sim_aspects):
         while idx < rnd_asp.shape[0]:
             asp_idx_0 = rnd_asp[idx]
             asp_idx_1 = rnd_asp[idx + 1]
-            replaced_corpus = corpus.replace(aspects[asp_idx_0], mask[0])
-            replaced_corpus = replaced_corpus.replace(aspects[asp_idx_1], mask[1])
+            
+            # 유사어 이용 대치
+            replaced_corpus = corpus
+            for aspect in sim_aspects[asp_idx_0]:
+                replaced_corpus = replaced_corpus.replace(aspect, mask[0])
+            for aspect in sim_aspects[asp_idx_1]:
+                replaced_corpus = replaced_corpus.replace(aspect, mask[1])
+                
             masked_corpus_list.append(replaced_corpus)
             masked_corpus_info.append([corpus_idx, asp_idx_0, asp_idx_1])
             idx = idx + 2

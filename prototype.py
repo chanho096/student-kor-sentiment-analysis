@@ -22,7 +22,7 @@ ABSA_model_path = "ABSA_model.pt"
 daum_movie_url = "https://movie.daum.net/main/new#slide-1-0"
 
 
-def corpus_analysis(ctx="cuda0"):
+def corpus_analysis(ctx="cuda:0"):
     # create ABSA model
     model = ABSAModel(ctx=ctx)
     model.load_kobert()
@@ -41,8 +41,7 @@ def corpus_analysis(ctx="cuda0"):
             break
 
         # create masked corpus
-        masked_corpus_list, masked_corpus_info = gen_aspect_mask([corpus], model.opt,
-                                                                 MOVIE_ASPECT, SIM_WORD_LIST)
+        masked_corpus_list, masked_corpus_info = gen_aspect_mask([corpus], model.opt, SIM_WORD_LIST)
         result_label = np.zeros((len(MOVIE_ASPECT), 1), dtype=np.int32)
         result = np.zeros((len(MOVIE_ASPECT), 1), dtype=np.float)
 
@@ -103,7 +102,7 @@ def daum_review_analysis(ctx="cuda:0"):
     corpus_list = crawl_data[1]
 
     # aspect-based review analysis
-    review_matrix = model.analyze_quickly(corpus_list, MOVIE_ASPECT, SIM_WORD_LIST)
+    review_matrix = model.analyze_quickly(corpus_list, SIM_WORD_LIST)
 
     # get probability
     total_count = np.abs(review_matrix).sum(axis=0)
@@ -154,7 +153,7 @@ def daum_review_analysis(ctx="cuda:0"):
     print(f"### \"{custom_aspect}\" 감성 분석 실행...")
 
     # aspect-based review analysis
-    rm = model.analyze_quickly(corpus_list, aspects=[custom_aspect], sim_aspects=[[custom_aspect]])
+    rm = model.analyze_quickly(corpus_list, sim_aspects=[[custom_aspect]])
 
     # get probability
     tc = np.abs(rm).sum(axis=0)[0]
