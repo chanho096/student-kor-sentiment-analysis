@@ -38,7 +38,7 @@ class TextPipeline(object):
 
         # Regulation
         for i in range(1, len(item['reviewText'])):
-            item['reviewText'][0] = item['reviewText'][0] + item['reviewText'][i]
+            item['reviewText'][0] = item['reviewText'][0] + ' ' + item['reviewText'][i]
         item['reviewText'] = [item['reviewText'][0]]
         item['reviewText'][0] = re.sub(r"\n", " ", item['reviewText'][0], flags=re.UNICODE)
         item['reviewText'][0] = hangul.sub('', item['reviewText'][0])

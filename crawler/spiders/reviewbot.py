@@ -6,10 +6,8 @@ from crawler.utils import MovieCrawler
 item = CrawlerItem()
 utils = MovieCrawler()
 
-
 class ReviewSpider(scrapy.Spider):
     name = os.path.basename(__file__)
-    fileRangeName = "plandas"
     base_url = "https://movie.daum.net/moviedb/main?movieId=1"
     current_page = 1
     handle_httpstatus_list = [500]
@@ -29,7 +27,7 @@ class ReviewSpider(scrapy.Spider):
         if response.status not in self.handle_httpstatus_list:
             if len(response.xpath('//*[@id="mArticle"]/div[2]/div[2]/div[1]/p')) == 0:
                 numOfli = len(response.xpath('//*[@id="mArticle"]/div[2]/div[2]/div[1]/ul/li').extract())
-                for i in range(1, numOfli):
+                for i in range(1, numOfli+1):
                     reviewText = response.xpath('//*[@id="mArticle"]/div[2]/div[2]/div[1]/ul/li[{0}]/div/p/text()'.format(i))
                     reviewTitle = response.xpath('//*[@id="mArticle"]/div[1]/a/h2/text()')
                     item['reviewTitle'] = reviewTitle.extract()
