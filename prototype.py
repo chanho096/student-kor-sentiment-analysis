@@ -20,7 +20,6 @@ SIM_WORD_LIST = [["연기", "연극"],
 
 ABSA_model_path = "ABSA_model.pt"
 daum_movie_url = "https://movie.daum.net/main/new#slide-1-0"
-demo_url = "https://movie.daum.net/moviedb/main?movieId=2"
 
 
 def _aspect_mask_to_corpus(corpus_list, opt, aspect_set=SIM_WORD_LIST):
