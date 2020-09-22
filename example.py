@@ -183,10 +183,10 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
                 x = word_embedding(token_ids)
 
                 # forward propagation
-                out = model(x, segment_ids, attention_mask)
+                out_0, _, _ = model(x, segment_ids, attention_mask, sa=True, absa=False)
 
                 # test accuracy
-                test_accuracy += md.calculate_accuracy(out, label)
+                test_accuracy += md.calculate_accuracy(out_0, label[:, 0])
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
         torch.save(model.state_dict(), f"trained_model_{e}.pt")
