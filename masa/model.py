@@ -34,6 +34,21 @@ DEFAULT_OPTION = {
 }
 
 
+class BERTDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset, sentence_idx, label_idx, bert_tokenizer, max_len, pad=True, pair=False):
+        # Tokenization 수행
+        transform = nlp.data.BERTSentenceTransform(
+            bert_tokenizer, max_seq_length=max_len, pad=pad, pair=pair)
+        self.sentence = [transform([record[sentence_idx]]) for record in dataset]
+        self.labels = [np.array(record[label_idx], dtype=np.int32) for record in dataset]
+
+    def __getitem__(self, i):
+        return self.sentence[i] + (self.labels[i],)
+
+    def __len__(self):
+        return len(self.labels)
+
+
 class ABSAClassifier(torch.nn.Module):
     def __init__(self,
                  bert,

@@ -10,9 +10,8 @@ import transformers
 import numpy as np
 import random
 
-
 ABSA_model_path = "ABSA_model.pt"
-result_model_name = "ABSA_model_trained"
+MOVIE_ASPECT = ["연기", "배우", "스토리", "액션", "감정", "연출", "반전", "음악", "규모"]
 EX_SIM_WORD_LIST = [["연기", "연극"],
                     ["배우", "캐스팅", "모델"],
                     ["스토리", "이야기", "시나리오", "콘텐츠", "에피소드", "전개"],
@@ -73,27 +72,46 @@ def _model_validation(ABSA_model):
     return result_0, result_1, result_2
 
 
-def ex__pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
-    device = torch.device(ctx)
+def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
+    ABSA_model = ABSAModel(ctx=ctx)
+    ABSA_model.load_kobert()
+    ABSA_model.load_model(model_path=None)
 
-    # load bert model
-    bert_model, vocab = kobert.pytorch_kobert.get_pytorch_kobert_model()
+    # ---------------------- Data Loader -----------------------
+    # ----------------------------------------------------------
+    # Naver sentiment movie corpus v1.0
+    data_path = loader.download_corpus_data()
 
-    # load train / test dataset
-    bert_tokenizer = md.get_bert_tokenizer(vocab)
+    batch_loaders = []
+    for path in data_path:
+        dataset = nlp.data.TSVDataset(path, field_indices=[1, 2], num_discard_samples=1)
 
-    train_data_path, test_data_path = loader.download_corpus_data()  # Naver sentiment movie corpus v1.0
-    dataset_train = md.get_bert_dataset(train_data_path, sentence_idx=1, label_idx=2,
-                                        max_len=opt["max_len"], bert_tokenizer=bert_tokenizer)
-    dataset_test = md.get_bert_dataset(test_data_path, sentence_idx=1, label_idx=2,
-                                       max_len=opt["max_len"], bert_tokenizer=bert_tokenizer)
+        corpus_list = []
+        label_list = []
+        for (corpus, label) in list(dataset):
+            corpus_list.append(corpus)
 
-    # data loader
-    train_dataloader = torch.utils.data.DataLoader(dataset_train, batch_size=opt["batch_size"], num_workers=0)
-    test_dataloader = torch.utils.data.DataLoader(dataset_test, batch_size=opt["batch_size"], num_workers=0)
+            # set label array
+            label_array = np.array([label, label, label], dtype=np.int32)
+            label_array[1] = label_array[1] * 2  # 0->0, 1->2
+            label_array[2] = label_array[2] * 2  # 0->0, 1->2
 
-    # model
-    model = md.BERTClassifier(bert_model, dr_rate=opt["drop_out_rate"]).to(device)
+            # set label list
+            label_list.append(label_array)
+
+        sentence_info = ABSA_model.tokenize(corpus_list)
+        for idx, tuple_item in enumerate(sentence_info):
+            sentence_info[idx] = tuple_item + (label_list[idx],)
+
+        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"], num_workers=0)
+        batch_loaders.append(batch_loader)
+
+    train_batch_loader, test_batch_loader = batch_loaders
+
+    # ----------------- ABSA CLASSIFIER MODEL ------------------
+    # ----------------------------------------------------------
+    model = ABSA_model.model
+    device = ABSA_model.device
 
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
@@ -102,20 +120,21 @@ def ex__pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
     optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning_rate"])
-    loss_function = torch.nn.CrossEntropyLoss()
+    lf = torch.nn.CrossEntropyLoss()
 
-    t_total = len(train_dataloader) * opt["num_epochs"]
+    t_total = len(train_batch_loader) * opt["num_epochs"]
     warmup_steps = int(t_total * opt["warmup_ratio"])
     scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
 
+    # -------------- ABSA CLASSIFIER MODEL TRAIN ---------------
+    # ----------------------------------------------------------
     for e in range(opt["num_epochs"]):
         train_accuracy = 0.0
         test_accuracy = 0.0
 
         # Train Batch
         model.train()
-
-        for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(train_dataloader):
+        for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(train_batch_loader):
             optimizer.zero_grad()
 
             # set train batch
@@ -130,17 +149,17 @@ def ex__pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             x = word_embedding(token_ids)
 
             # forward propagation
-            out = model(x, segment_ids, attention_mask)
+            out_0, out_1, out_2 = model(x, segment_ids, attention_mask, sa=True, absa=True)
 
             # backward propagation
-            loss = loss_function(out, label)
+            loss = lf(out_0, label[:, 0]) + lf(out_1, label[:, 1]) + lf(out_2, label[:, 2])
             loss.backward()
 
             # optimization
             torch.nn.utils.clip_grad_norm_(model.parameters(), opt["max_grad_norm"])
             optimizer.step()
             scheduler.step()  # Update learning rate schedule
-            train_accuracy += md.calculate_accuracy(out, label)
+            train_accuracy += md.calculate_accuracy(out_0, label[:, 0])
 
             if batch_id % opt["log_interval"] == 0:
                 print("epoch {} batch id {} loss {} train accuracy {}".format(e + 1, batch_id + 1,
@@ -151,7 +170,7 @@ def ex__pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
         # Test Batch
         model.eval()
         with torch.no_grad():
-            for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(test_dataloader):
+            for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(test_batch_loader):
                 # set test batch
                 token_ids = token_ids.long().to(device)
                 segment_ids = segment_ids.long().to(device)
@@ -170,13 +189,13 @@ def ex__pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
                 test_accuracy += md.calculate_accuracy(out, label)
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
-        torch.save(model.state_dict(), sa_model_path)
+        torch.save(model.state_dict(), f"trained_model_{e}.pt")
 
 
-def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
+def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
-    ABSA_model.load_model(model_path=None)
+    ABSA_model.load_model(model_path=ABSA_model_path)
 
     random.seed(3)
     np.random.seed(3)
@@ -272,16 +291,16 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
     # ----------------- ABSA CLASSIFIER MODEL ------------------
     # ----------------------------------------------------------
-
     # create batch loader
     sentence_info = ABSA_model.tokenize(train_corpus_list)
 
     for idx, tuple_item in enumerate(sentence_info):
-        sentence_info[idx] = tuple_item + (train_label_list[idx], )
+        sentence_info[idx] = tuple_item + (train_label_list[idx],)
     batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"], num_workers=0)
 
     # aspect-based sentiment analysis model
     model = ABSA_model.model
+    device = ABSA_model.device
 
     # optimization - AdamW
     no_decay = ['bias', 'LayerNorm.weight']
@@ -311,10 +330,10 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             optimizer.zero_grad()
 
             # set train batch
-            token_ids = token_ids.long().to(ABSA_model.device)
-            segment_ids = segment_ids.long().to(ABSA_model.device)
+            token_ids = token_ids.long().to(device)
+            segment_ids = segment_ids.long().to(device)
             valid_length = valid_length
-            label = label.long().to(ABSA_model.device)
+            label = label.long().to(device)
 
             # get word embedding
             attention_mask = md.gen_attention_mask(token_ids, valid_length)
@@ -347,45 +366,15 @@ def ex__ABSA_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
         r1, r2, r3 = _model_validation(ABSA_model)
         print(f"total accuracy: {'%0.2f' % r1}%, case_0 accuracy: {'%0.2f' % r2}%, case_1 accuracy: {'%0.2f' % r3}%")
 
-        torch.save(model.state_dict(), result_model_name + f"_{e}.pt")
+        if e % 2 == 0:
+            torch.save(model.state_dict(), f"trained_model_{e}.pt")
 
 
-def ex__ABSA(model_path=ABSA_model_path, opt=md.DEFAULT_OPTION, ctx="cuda:0"):
-    device = torch.device(ctx)
-    bert_model, vocab = kobert.pytorch_kobert.get_pytorch_kobert_model()
-
-    model = md.ABSAClassifier(bert_model, torch.nn.Linear(768, 2)).to(device)
-    model.load_state_dict(torch.load(model_path))
-
-    corpus = [["오늘 밥먹었는데 정말 최고였어요. 근데 영화 대상 진짜 안좋더라구요", [0, 1]]]
-    bert_tokenizer = md.get_bert_tokenizer(vocab)
-    dataset = md.BERTDataset(corpus, 0, 1, bert_tokenizer, opt["max_len"], pad=True, pair=False)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=2, num_workers=0)
-
-    model.eval()
-    with torch.no_grad():
-        for batch_id, (token_ids, valid_length, segment_ids, _) in enumerate(dataloader):
-            # set test batch
-            token_ids = token_ids.long().to(device)
-            segment_ids = segment_ids.long().to(device)
-            valid_length = valid_length
-
-            # get word embedding
-            attention_mask = md.gen_attention_mask(token_ids, valid_length)
-            word_embedding = model.bert.get_input_embeddings()
-            x = word_embedding(token_ids)
-
-            # forward propagation
-            _, out_1, out_2 = model(x, segment_ids, attention_mask, sa=False, absa=True)
-            print(out_1, out_2)
-
-
-def ex__cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
+def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
     model = md.ABSAModel(ctx)
     model.load_kobert()
     model.load_model(model_path)
 
-    MOVIE_ASPECT = ["연기", "배우", "스토리", "액션", "감정", "연출", "반전", "음악", "규모"]
     sentence_info = model.tokenize(MOVIE_ASPECT)
     x = model.word_embedding(sentence_info)
     asp = x[:, 1, :]  # LEN * H
@@ -410,7 +399,7 @@ def ex__cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
             sim = np.divide(sim, w_norm)
             sim = np.divide(sim, asp_norm)
 
-            cosine_sim[idx:idx+batch_count, :] = sim
+            cosine_sim[idx:idx + batch_count, :] = sim
             idx = idx + batch_count
 
     top_count = 30
@@ -429,11 +418,4 @@ def ex__cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
-    ex__ABSA_training()
-
-
-
-
-
-
-
+    ex_pre_training()
