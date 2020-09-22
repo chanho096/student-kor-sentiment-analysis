@@ -72,6 +72,102 @@ def _model_validation(ABSA_model):
     return result_0, result_1, result_2
 
 
+def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
+    random.seed(3)
+    np.random.seed(3)
+
+    object_text_0 = opt["object_text_0"]
+    object_text_1 = opt["object_text_1"]
+
+    # 길이 64 초과의 문자열 데이터를 제거한다.
+    target_dataset = []
+    for data in dataset:
+        if len(data[0]) > 64:
+            continue
+        target_dataset.append(data)
+    dataset = target_dataset
+
+    # --------------- DATA AUGMENTATION FOR ABSA ---------------
+    # ----------------------------------------------------------
+    data_list = []
+
+    # get dataset with data augmentation
+    pos_dataset = []
+    neg_dataset = []
+    for data in dataset:
+        if data[2] == 'positive':
+            pos_dataset.append(data)
+        else:
+            neg_dataset.append(data)
+
+    # random value
+    rnd_0 = np.random.uniform(0, 1, len(dataset)) > 0.5
+    rnd_1 = np.random.randint(0, len(dataset) - 1, len(dataset))
+    rnd_2 = np.random.uniform(0, 1, len(dataset)) > 0.5
+    rnd_3 = np.random.randint(0, len(neg_dataset), len(pos_dataset))
+    rnd_4 = np.random.uniform(0, 1, len(pos_dataset)) > 0.5
+
+    # split by list
+    for idx, (corpus, aspect, label) in enumerate(list(dataset)):
+        # original data
+        data_list.append([corpus, [1, 1]])
+
+        # augmented data - single
+        label_number = 2 if label == "positive" else 0
+        if rnd_0[idx]:
+            aug_corpus = corpus.replace(aspect, object_text_0)
+            aug_label = [label_number, 1]
+        else:
+            aug_corpus = corpus.replace(aspect, object_text_1)
+            aug_label = [1, label_number]
+        data_list.append([aug_corpus, aug_label])
+
+        # augmented data - double
+        rnd_1[idx] = len(dataset) - 1 if rnd_1[idx] == idx else rnd_1[idx]
+        corpus_1, aspect_1, label_1 = dataset[rnd_1[idx]]
+        label_number_1 = 2 if label_1 == "positive" else 0
+
+        if rnd_2[idx]:
+            aug_text_0 = object_text_0
+            aug_text_1 = object_text_1
+        else:
+            aug_text_0 = object_text_1
+            aug_text_1 = object_text_0
+
+        aug_corpus = corpus.replace(aspect, aug_text_0) + " " + corpus_1.replace(aspect_1, aug_text_1)
+        aug_label = [label_number, label_number_1]
+        data_list.append([aug_corpus, aug_label])
+
+    # augmented data - counter double
+    for idx, (pos_corpus, pos_aspect, _) in enumerate(pos_dataset):
+        neg_corpus, neg_aspect, _ = neg_dataset[rnd_3[idx]]
+        pos_label_number = 2
+        neg_label_number = 0
+
+        if rnd_4[idx]:
+            left_corpus = pos_corpus.replace(pos_aspect, object_text_0)
+            right_corpus = neg_corpus.replace(neg_aspect, object_text_1)
+            aug_label = [pos_label_number, neg_label_number]
+        else:
+            left_corpus = neg_corpus.replace(neg_aspect, object_text_0)
+            right_corpus = pos_corpus.replace(pos_aspect, object_text_1)
+            aug_label = [neg_label_number, pos_label_number]
+        aug_corpus = left_corpus + " " + right_corpus
+        data_list.append([aug_corpus, aug_label])
+
+    # random shuffle
+    random.shuffle(data_list)
+
+    # get corpus, label list
+    corpus_list = []
+    label_list = []
+    for (corpus, label) in data_list:
+        corpus_list.append(corpus)
+        label_list.append(np.array(label, dtype=np.int32))
+
+    return corpus_list, label_list
+
+
 def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
@@ -197,107 +293,11 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model.load_kobert()
     ABSA_model.load_model(model_path=ABSA_model_path)
 
-    random.seed(3)
-    np.random.seed(3)
-
     # load dataset
     total_dataset = nlp.data.TSVDataset("sentiment_dataset.csv", field_indices=[0, 1, 3], num_discard_samples=1)
-    train_dataset = total_dataset
-
-    object_text_0 = opt["object_text_0"]
-    object_text_1 = opt["object_text_1"]
-
-    # --------------- DATA AUGMENTATION FOR ABSA ---------------
-    # ----------------------------------------------------------
-    # data list
-    train_data_list = []
-    data_list = [train_data_list]
-    dataset_list = [train_dataset]
-
-    # set train / test data with data augmentation
-    for didx, dataset in enumerate(dataset_list):
-        pos_dataset = []
-        neg_dataset = []
-        for data in dataset:
-            if data[2] == 'positive':
-                pos_dataset.append(data)
-            else:
-                neg_dataset.append(data)
-
-        # random value
-        rnd_0 = np.random.uniform(0, 1, len(dataset)) > 0.5
-        rnd_1 = np.random.randint(0, len(dataset) - 1, len(dataset))
-        rnd_2 = np.random.uniform(0, 1, len(dataset)) > 0.5
-        rnd_3 = np.random.randint(0, len(neg_dataset), len(pos_dataset))
-        rnd_4 = np.random.uniform(0, 1, len(pos_dataset)) > 0.5
-
-        # split by list
-        for idx, (corpus, aspect, label) in enumerate(list(dataset)):
-            # original data
-            data_list[didx].append([corpus, [1, 1]])
-
-            # augmented data - single
-            label_number = 2 if label == "positive" else 0
-            if rnd_0[idx]:
-                aug_corpus = corpus.replace(aspect, object_text_0)
-                aug_label = [label_number, 1]
-            else:
-                aug_corpus = corpus.replace(aspect, object_text_1)
-                aug_label = [1, label_number]
-            data_list[didx].append([aug_corpus, aug_label])
-
-            # augmented data - double
-            rnd_1[idx] = len(dataset) - 1 if rnd_1[idx] == idx else rnd_1[idx]
-            corpus_1, aspect_1, label_1 = dataset[rnd_1[idx]]
-            label_number_1 = 2 if label_1 == "positive" else 0
-
-            if rnd_2[idx]:
-                aug_text_0 = object_text_0
-                aug_text_1 = object_text_1
-            else:
-                aug_text_0 = object_text_1
-                aug_text_1 = object_text_0
-
-            aug_corpus = corpus.replace(aspect, aug_text_0) + " " + corpus_1.replace(aspect_1, aug_text_1)
-            aug_label = [label_number, label_number_1]
-            data_list[didx].append([aug_corpus, aug_label])
-
-        # augmented data - counter double
-        for idx, (pos_corpus, pos_aspect, _) in enumerate(pos_dataset):
-            neg_corpus, neg_aspect, _ = neg_dataset[rnd_3[idx]]
-            pos_label_number = 2
-            neg_label_number = 0
-
-            if rnd_4[idx]:
-                left_corpus = pos_corpus.replace(pos_aspect, object_text_0)
-                right_corpus = neg_corpus.replace(neg_aspect, object_text_1)
-                aug_label = [pos_label_number, neg_label_number]
-            else:
-                left_corpus = neg_corpus.replace(neg_aspect, object_text_0)
-                right_corpus = pos_corpus.replace(pos_aspect, object_text_1)
-                aug_label = [neg_label_number, pos_label_number]
-            aug_corpus = left_corpus + " " + right_corpus
-            data_list[didx].append([aug_corpus, aug_label])
-
-    # random shuffle
-    random.shuffle(train_data_list)
-
-    #
-    train_corpus_list = []
-    train_label_list = []
-    for (corpus, label) in train_data_list:
-        train_corpus_list.append(corpus)
-        train_label_list.append(np.array(label, dtype=np.int32))
 
     # ----------------- ABSA CLASSIFIER MODEL ------------------
     # ----------------------------------------------------------
-    # create batch loader
-    sentence_info = ABSA_model.tokenize(train_corpus_list)
-
-    for idx, tuple_item in enumerate(sentence_info):
-        sentence_info[idx] = tuple_item + (train_label_list[idx],)
-    batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"], num_workers=0)
-
     # aspect-based sentiment analysis model
     model = ABSA_model.model
     device = ABSA_model.device
@@ -314,15 +314,26 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     # loss function - Cross Entropy
     loss_function = torch.nn.CrossEntropyLoss()
 
-    # warmup scheduler
-    t_total = len(batch_loader) * opt["num_epochs"]
-    warmup_steps = int(t_total * opt["warmup_ratio"])
-    scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
-
     # -------------- ABSA CLASSIFIER MODEL TRAIN ---------------
     # ----------------------------------------------------------
     for e in range(opt["num_epochs"]):
         train_accuracy = 0.0
+        # data augmentation
+        train_corpus_list, train_label_list = _load_with_augmentation(total_dataset, opt)
+
+        # create batch loader
+        sentence_info = ABSA_model.tokenize(train_corpus_list)
+
+        for idx, tuple_item in enumerate(sentence_info):
+            sentence_info[idx] = tuple_item + (train_label_list[idx],)
+        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"], num_workers=0)
+
+        if e == 0:
+            # only first epoch
+            # warmup scheduler
+            t_total = len(batch_loader) * opt["num_epochs"]  # size of batch...
+            warmup_steps = int(t_total * opt["warmup_ratio"])
+            scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
 
         # Train Batch
         model.train()
@@ -418,4 +429,4 @@ def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
-    ex_pre_training()
+    ex_model_training()
