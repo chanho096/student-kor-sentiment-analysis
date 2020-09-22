@@ -73,9 +73,6 @@ def _model_validation(ABSA_model):
 
 
 def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
-    random.seed(3)
-    np.random.seed(3)
-
     object_text_0 = opt["object_text_0"]
     object_text_1 = opt["object_text_1"]
 
