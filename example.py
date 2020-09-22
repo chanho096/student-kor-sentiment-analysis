@@ -76,12 +76,19 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
     object_text_0 = opt["object_text_0"]
     object_text_1 = opt["object_text_1"]
 
-    # 길이 64 초과의 문자열 데이터를 제거한다.
     target_dataset = []
     for data in dataset:
+        # 길이 64 초과의 문자열 데이터를 제거한다.
         if len(data[0]) > 64:
             continue
+
+        # corpus 에서 object text를 제거한다.
+        data[0] = data[0].replace(object_text_0, "", 3)
+        data[0] = data[0].replace(object_text_1, "", 3)
+
+        # 수정된 dataset 생성
         target_dataset.append(data)
+
     dataset = target_dataset
 
     # --------------- DATA AUGMENTATION FOR ABSA ---------------
@@ -102,8 +109,9 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
     rnd_1 = np.random.randint(0, len(dataset) - 1, len(dataset))
     rnd_2 = np.random.uniform(0, 1, len(dataset)) > 0.5
     rnd_3 = np.random.randint(0, len(neg_dataset), len(pos_dataset))
-    rnd_4 = np.random.uniform(0, 1, len(pos_dataset)) > 0.5
+    rnd_4 = np.random.randint(0, 256, len(pos_dataset))
     rnd_5 = np.random.uniform(0, 1, len(dataset)) > 0.5
+    rnd_6 = np.random.randint(0, 256, len(dataset))
 
     # split by list
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
@@ -122,11 +130,11 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
 
         # augmented data - single +
         if rnd_5[idx]:
-            if rnd_5[idx] % 4 == 0:
+            if rnd_6[idx] % 4 == 0:
                 aug_corpus = corpus.replace(aspect, object_text_0 + ", " + object_text_1)
-            elif rnd_5[idx] % 4 == 1:
+            elif rnd_6[idx] % 4 == 1:
                 aug_corpus = corpus.replace(aspect, object_text_1 + ", " + object_text_0)
-            elif rnd_5[idx] % 4 == 2:
+            elif rnd_6[idx] % 4 == 2:
                 aug_corpus = corpus.replace(aspect, object_text_0 + " " + object_text_1)
             else:
                 aug_corpus = corpus.replace(aspect, object_text_1 + ", " + object_text_0)
@@ -157,14 +165,23 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         pos_label_number = 2
         neg_label_number = 0
 
-        if rnd_4[idx]:
+        if rnd_4[idx] % 4 == 0:
             left_corpus = pos_corpus.replace(pos_aspect, object_text_0, 3)
             right_corpus = neg_corpus.replace(neg_aspect, object_text_1, 3)
             aug_label = [pos_label_number, neg_label_number]
-        else:
+        elif rnd_4[idx] % 4 == 1:
             left_corpus = neg_corpus.replace(neg_aspect, object_text_0, 3)
             right_corpus = pos_corpus.replace(pos_aspect, object_text_1, 3)
             aug_label = [neg_label_number, pos_label_number]
+        elif rnd_4[idx] % 4 == 2:
+            left_corpus = neg_corpus.replace(neg_aspect, object_text_1, 3)
+            right_corpus = pos_corpus.replace(pos_aspect, object_text_0, 3)
+            aug_label = [pos_label_number, neg_label_number]
+        else:
+            left_corpus = pos_corpus.replace(pos_aspect, object_text_1, 3)
+            right_corpus = neg_corpus.replace(neg_aspect, object_text_0, 3)
+            aug_label = [neg_label_number, pos_label_number]
+
         aug_corpus = left_corpus + " " + right_corpus
         data_list.append([aug_corpus, aug_label])
 
@@ -331,6 +348,7 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     # ----------------------------------------------------------
     for e in range(opt["num_epochs"]):
         train_accuracy = 0.0
+
         # data augmentation
         train_corpus_list, train_label_list = _load_with_augmentation(total_dataset, opt)
 
@@ -388,7 +406,9 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
         # Validation
         r1, r2, r3 = _model_validation(ABSA_model)
-        print(f"total accuracy: {'%0.2f' % r1}%, case_0 accuracy: {'%0.2f' % r2}%, case_1 accuracy: {'%0.2f' % r3}%")
+        print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
+              f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
+              f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
 
         if e % 2 == 0:
             torch.save(model.state_dict(), f"trained_model_{e}.pt")
