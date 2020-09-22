@@ -69,9 +69,7 @@ def _model_validation(ABSA_model):
     result_0 = hit_count / total_count  # 전체 적중률
     result_1 = result[0][0] / result[0][1]  # 대립 사례 적중률
     result_2 = result[1][0] / result[1][1]  # 일치 사례 적중률
-    print(result_0)
-    print(result_1)
-    print(result_2)
+
     return result_0, result_1, result_2
 
 
