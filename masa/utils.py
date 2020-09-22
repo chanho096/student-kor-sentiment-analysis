@@ -35,7 +35,7 @@ def gen_aspect_mask(corpus_list, opt, sim_aspects):
             # 유사어 이용 대치
             replaced_corpus = corpus
             for aspect in sim_aspects[asp_idx]:
-                replaced_corpus = replaced_corpus.replace(aspect, mask[0])
+                replaced_corpus = replaced_corpus.replace(aspect, mask[0], 3)
 
             masked_corpus_list.append(replaced_corpus)
             masked_corpus_info.append([corpus_idx, asp_idx, -1])
@@ -45,14 +45,14 @@ def gen_aspect_mask(corpus_list, opt, sim_aspects):
         while idx < rnd_asp.shape[0]:
             asp_idx_0 = rnd_asp[idx]
             asp_idx_1 = rnd_asp[idx + 1]
-            
+
             # 유사어 이용 대치
             replaced_corpus = corpus
             for aspect in sim_aspects[asp_idx_0]:
-                replaced_corpus = replaced_corpus.replace(aspect, mask[0])
+                replaced_corpus = replaced_corpus.replace(aspect, mask[0], 3)
             for aspect in sim_aspects[asp_idx_1]:
-                replaced_corpus = replaced_corpus.replace(aspect, mask[1])
-                
+                replaced_corpus = replaced_corpus.replace(aspect, mask[1], 3)
+
             masked_corpus_list.append(replaced_corpus)
             masked_corpus_info.append([corpus_idx, asp_idx_0, asp_idx_1])
             idx = idx + 2

@@ -112,10 +112,10 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         # augmented data - single
         label_number = 2 if label == "positive" else 0
         if rnd_0[idx]:
-            aug_corpus = corpus.replace(aspect, object_text_0)
+            aug_corpus = corpus.replace(aspect, object_text_0, 3)
             aug_label = [label_number, 1]
         else:
-            aug_corpus = corpus.replace(aspect, object_text_1)
+            aug_corpus = corpus.replace(aspect, object_text_1, 3)
             aug_label = [1, label_number]
         data_list.append([aug_corpus, aug_label])
 
@@ -127,12 +127,13 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         if rnd_2[idx]:
             aug_text_0 = object_text_0
             aug_text_1 = object_text_1
+            aug_label = [label_number, label_number_1]
         else:
             aug_text_0 = object_text_1
             aug_text_1 = object_text_0
+            aug_label = [label_number_1, label_number]
 
-        aug_corpus = corpus.replace(aspect, aug_text_0) + " " + corpus_1.replace(aspect_1, aug_text_1)
-        aug_label = [label_number, label_number_1]
+        aug_corpus = corpus.replace(aspect, aug_text_0, 3) + " " + corpus_1.replace(aspect_1, aug_text_1, 3)
         data_list.append([aug_corpus, aug_label])
 
     # augmented data - counter double
@@ -142,12 +143,12 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         neg_label_number = 0
 
         if rnd_4[idx]:
-            left_corpus = pos_corpus.replace(pos_aspect, object_text_0)
-            right_corpus = neg_corpus.replace(neg_aspect, object_text_1)
+            left_corpus = pos_corpus.replace(pos_aspect, object_text_0, 3)
+            right_corpus = neg_corpus.replace(neg_aspect, object_text_1, 3)
             aug_label = [pos_label_number, neg_label_number]
         else:
-            left_corpus = neg_corpus.replace(neg_aspect, object_text_0)
-            right_corpus = pos_corpus.replace(pos_aspect, object_text_1)
+            left_corpus = neg_corpus.replace(neg_aspect, object_text_0, 3)
+            right_corpus = pos_corpus.replace(pos_aspect, object_text_1, 3)
             aug_label = [neg_label_number, pos_label_number]
         aug_corpus = left_corpus + " " + right_corpus
         data_list.append([aug_corpus, aug_label])
