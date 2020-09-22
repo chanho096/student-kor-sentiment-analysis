@@ -103,6 +103,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
     rnd_2 = np.random.uniform(0, 1, len(dataset)) > 0.5
     rnd_3 = np.random.randint(0, len(neg_dataset), len(pos_dataset))
     rnd_4 = np.random.uniform(0, 1, len(pos_dataset)) > 0.5
+    rnd_5 = np.random.uniform(0, 1, len(dataset)) > 0.5
 
     # split by list
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
@@ -118,6 +119,20 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
             aug_corpus = corpus.replace(aspect, object_text_1, 3)
             aug_label = [1, label_number]
         data_list.append([aug_corpus, aug_label])
+
+        # augmented data - single +
+        if rnd_5[idx]:
+            if rnd_5[idx] % 4 == 0:
+                aug_corpus = corpus.replace(aspect, object_text_0 + ", " + object_text_1)
+            elif rnd_5[idx] % 4 == 1:
+                aug_corpus = corpus.replace(aspect, object_text_1 + ", " + object_text_0)
+            elif rnd_5[idx] % 4 == 2:
+                aug_corpus = corpus.replace(aspect, object_text_0 + " " + object_text_1)
+            else:
+                aug_corpus = corpus.replace(aspect, object_text_1 + ", " + object_text_0)
+
+            aug_label = [label_number, label_number]
+            data_list.append([aug_corpus, aug_label])
 
         # augmented data - double
         rnd_1[idx] = len(dataset) - 1 if rnd_1[idx] == idx else rnd_1[idx]
