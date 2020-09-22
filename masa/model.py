@@ -10,8 +10,8 @@ import os
 import logging
 
 DEFAULT_OPTION = {
-    "batch_size": 8,
-    "num_epochs": 5,
+    "batch_size": 64,
+    "num_epochs": 10,
 
     # Pre-Processing
     "max_len": 64,
@@ -162,9 +162,11 @@ class ABSAModel:
     def load_model(self, model_path):
         """
             load pre-trained ABSA model
+            
+            model_path 가 None 으로 주어지면, 초기화 상태의 ABSA model 생성
         """
 
-        if not os.path.isfile(model_path):
+        if model_path and not os.path.isfile(model_path):
             logging.error("Invalid model path")
             return False
 
@@ -176,7 +178,8 @@ class ABSAModel:
         model = ABSAClassifier(self.bert_model).to(self.device)
 
         # load model parameter
-        model.load_state_dict(torch.load(model_path, map_location=self.device))
+        if model_path is not None:
+            model.load_state_dict(torch.load(model_path, map_location=self.device))
 
         # ready to analyze
         self.model = model
