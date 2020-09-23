@@ -219,7 +219,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
 def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
-    ABSA_model.load_model(model_path=ABSA_model_path)
+    ABSA_model.load_model(model_path=None)
 
     # ---------------------- Data Loader -----------------------
     # ----------------------------------------------------------
@@ -445,14 +445,14 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
               f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
 
         opt_tmp = ABSA_model.opt.copy()
-        ABSA_model["object_text_0"] = opt_tmp["object_text_1"]
-        ABSA_model["object_text_1"] = opt_tmp["object_text_0"]
+        ABSA_model.opt["object_text_0"] = opt_tmp["object_text_1"]
+        ABSA_model.opt["object_text_1"] = opt_tmp["object_text_0"]
 
         r1, r2, r3 = _model_validation(ABSA_model)
         print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
               f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
               f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
-        ABSA_model.opy = opt_tmp
+        ABSA_model.opt = opt_tmp
 
         if e % 2 == 0:
             torch.save(model.state_dict(), f"trained_model_{e}.pt")
