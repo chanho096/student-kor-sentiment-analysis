@@ -102,7 +102,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         else:
             neg_dataset.append(data)
     min_count = min(len(pos_dataset), len(neg_dataset))
-    num_counter_case = min_count * 3
+    num_counter_case = min_count * 3 * 2
 
     # random value
     rnd_0 = np.random.uniform(0, 1, len(dataset)) > 0.5
@@ -228,7 +228,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
             short_neg_dataset.append(data)
         short_dataset.append(data)
 
-    num_triple_counter_case = len(short_dataset) * 2
+    num_triple_counter_case = len(short_dataset) * 2 * 3
     rnd_pos = np.random.randint(0, len(short_pos_dataset), num_triple_counter_case)
     rnd_neg = np.random.randint(0, len(short_neg_dataset), num_triple_counter_case)
     rnd_null = np.random.randint(0, len(short_dataset), num_triple_counter_case)
@@ -432,27 +432,28 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     # loss function - Cross Entropy
     loss_function = torch.nn.CrossEntropyLoss()
 
+    # data augmentation
+    train_corpus_list, train_label_list = _load_with_augmentation(total_dataset, opt)
+
+    # create batch loader
+    sentence_info = ABSA_model.tokenize(train_corpus_list)
+
+    for idx, tuple_item in enumerate(sentence_info):
+        sentence_info[idx] = tuple_item + (train_label_list[idx],)
+    batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
+                                               num_workers=0, shuffle=True)
+    e = 0
+    if e == 0:
+        # only first epoch
+        # warmup scheduler
+        t_total = len(batch_loader) * opt["num_epochs"]  # size of batch...
+        warmup_steps = int(t_total * opt["warmup_ratio"])
+        scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
+
     # -------------- ABSA CLASSIFIER MODEL TRAIN ---------------
     # ----------------------------------------------------------
     for e in range(opt["num_epochs"]):
         train_accuracy = 0.0
-
-        # data augmentation
-        train_corpus_list, train_label_list = _load_with_augmentation(total_dataset, opt)
-
-        # create batch loader
-        sentence_info = ABSA_model.tokenize(train_corpus_list)
-
-        for idx, tuple_item in enumerate(sentence_info):
-            sentence_info[idx] = tuple_item + (train_label_list[idx],)
-        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
-                                                   num_workers=0, shuffle=True)
-        if e == 0:
-            # only first epoch
-            # warmup scheduler
-            t_total = len(batch_loader) * opt["num_epochs"]  # size of batch...
-            warmup_steps = int(t_total * opt["warmup_ratio"])
-            scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
 
         # Train Batch
         model.train()
