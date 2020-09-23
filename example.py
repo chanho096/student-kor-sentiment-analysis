@@ -101,8 +101,8 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
             pos_dataset.append(data)
         else:
             neg_dataset.append(data)
-    min_count = min(len(pos_dataset), len(neg_dataset))
-    num_counter_case = min_count * 3 * 2
+
+    num_counter_case = len(dataset) * 3
 
     # random value
     rnd_0 = np.random.uniform(0, 1, len(dataset)) > 0.5
@@ -234,6 +234,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
     rnd_null = np.random.randint(0, len(short_dataset), num_triple_counter_case)
     rnd_case_0 = np.random.uniform(0, 1, num_triple_counter_case) > 0.5
     rnd_case_1 = np.random.randint(0, 768, num_triple_counter_case)
+    rnd_case_2 = np.random.randint(0, 768, num_triple_counter_case)
 
     for idx in range(0, num_triple_counter_case):
         if rnd_case_0[idx]:
@@ -249,9 +250,6 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         neg_corpus, neg_aspect, _ = short_neg_dataset[rnd_neg[idx]]
         null_corpus, _, _ = short_dataset[rnd_null[idx]]
 
-        pos_corpus = pos_corpus.replace(pos_aspect, pos_text, 3)
-        neg_corpus = neg_corpus.replace(neg_aspect, neg_text, 3)
-
         if rnd_case_1[idx] % 6 == 0:
             aug_corpus = pos_corpus + " " + null_corpus + " " + neg_corpus
         elif rnd_case_1[idx] % 6 == 1:
@@ -261,6 +259,24 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         elif rnd_case_1[idx] % 6 == 3:
             aug_corpus = null_corpus + " " + neg_corpus + " " + pos_corpus
         elif rnd_case_1[idx] % 6 == 4:
+            aug_corpus = pos_corpus + " " + neg_corpus + " " + null_corpus
+        else:
+            aug_corpus = neg_corpus + " " + pos_corpus + " " + null_corpus
+
+        data_list.append([aug_corpus, [1, 1]])
+
+        pos_corpus = pos_corpus.replace(pos_aspect, pos_text, 3)
+        neg_corpus = neg_corpus.replace(neg_aspect, neg_text, 3)
+
+        if rnd_case_2[idx] % 6 == 0:
+            aug_corpus = pos_corpus + " " + null_corpus + " " + neg_corpus
+        elif rnd_case_2[idx] % 6 == 1:
+            aug_corpus = neg_corpus + " " + null_corpus + " " + pos_corpus
+        elif rnd_case_2[idx] % 6 == 2:
+            aug_corpus = null_corpus + " " + pos_corpus + " " + neg_corpus
+        elif rnd_case_2[idx] % 6 == 3:
+            aug_corpus = null_corpus + " " + neg_corpus + " " + pos_corpus
+        elif rnd_case_2[idx] % 6 == 4:
             aug_corpus = pos_corpus + " " + neg_corpus + " " + null_corpus
         else:
             aug_corpus = neg_corpus + " " + pos_corpus + " " + null_corpus
@@ -432,28 +448,27 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     # loss function - Cross Entropy
     loss_function = torch.nn.CrossEntropyLoss()
 
-    # data augmentation
-    train_corpus_list, train_label_list = _load_with_augmentation(total_dataset, opt)
-
-    # create batch loader
-    sentence_info = ABSA_model.tokenize(train_corpus_list)
-
-    for idx, tuple_item in enumerate(sentence_info):
-        sentence_info[idx] = tuple_item + (train_label_list[idx],)
-    batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
-                                               num_workers=0, shuffle=True)
-    e = 0
-    if e == 0:
-        # only first epoch
-        # warmup scheduler
-        t_total = len(batch_loader) * opt["num_epochs"]  # size of batch...
-        warmup_steps = int(t_total * opt["warmup_ratio"])
-        scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
-
     # -------------- ABSA CLASSIFIER MODEL TRAIN ---------------
     # ----------------------------------------------------------
     for e in range(opt["num_epochs"]):
         train_accuracy = 0.0
+
+        # data augmentation
+        train_corpus_list, train_label_list = _load_with_augmentation(total_dataset, opt)
+
+        # create batch loader
+        sentence_info = ABSA_model.tokenize(train_corpus_list)
+
+        for idx, tuple_item in enumerate(sentence_info):
+            sentence_info[idx] = tuple_item + (train_label_list[idx],)
+        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
+                                                   num_workers=0, shuffle=True)
+        if e == 0:
+            # only first epoch
+            # warmup scheduler
+            t_total = len(batch_loader) * opt["num_epochs"]  # size of batch...
+            warmup_steps = int(t_total * opt["warmup_ratio"])
+            scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
 
         # Train Batch
         model.train()
