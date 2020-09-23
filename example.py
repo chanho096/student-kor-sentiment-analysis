@@ -214,6 +214,59 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         aug_corpus = left_corpus + " " + right_corpus
         data_list.append([aug_corpus, aug_label])
 
+    # augmented data - counter triple
+    short_pos_dataset = []
+    short_neg_dataset = []
+    short_dataset = []
+    for data in dataset:
+        if len(data[0]) > 32:
+            continue
+
+        if data[2] == 'positive':
+            short_pos_dataset.append(data)
+        else:
+            short_neg_dataset.append(data)
+        short_dataset.append(data)
+
+    num_triple_counter_case = len(short_dataset) * 2
+    rnd_pos = np.random.randint(0, len(short_pos_dataset), num_triple_counter_case)
+    rnd_neg = np.random.randint(0, len(short_neg_dataset), num_triple_counter_case)
+    rnd_null = np.random.randint(0, len(short_dataset), num_triple_counter_case)
+    rnd_case_0 = np.random.uniform(0, 1, num_triple_counter_case) > 0.5
+    rnd_case_1 = np.random.randint(0, 768, num_triple_counter_case)
+
+    for idx in range(0, num_triple_counter_case):
+        if rnd_case_0[idx]:
+            neg_text = object_text_0
+            pos_text = object_text_1
+            aug_label = [0, 2]
+        else:
+            neg_text = object_text_1
+            pos_text = object_text_0
+            aug_label = [2, 0]
+
+        pos_corpus, pos_aspect, _ = short_pos_dataset[rnd_pos[idx]]
+        neg_corpus, neg_aspect, _ = short_neg_dataset[rnd_neg[idx]]
+        null_corpus, _, _ = short_dataset[rnd_null[idx]]
+
+        pos_corpus = pos_corpus.replace(pos_aspect, pos_text, 3)
+        neg_corpus = neg_corpus.replace(neg_aspect, neg_text, 3)
+
+        if rnd_case_1[idx] % 6 == 0:
+            aug_corpus = pos_corpus + " " + null_corpus + " " + neg_corpus
+        elif rnd_case_1[idx] % 6 == 1:
+            aug_corpus = neg_corpus + " " + null_corpus + " " + pos_corpus
+        elif rnd_case_1[idx] % 6 == 2:
+            aug_corpus = null_corpus + " " + pos_corpus + " " + neg_corpus
+        elif rnd_case_1[idx] % 6 == 3:
+            aug_corpus = null_corpus + " " + neg_corpus + " " + pos_corpus
+        elif rnd_case_1[idx] % 6 == 4:
+            aug_corpus = pos_corpus + " " + neg_corpus + " " + null_corpus
+        else:
+            aug_corpus = neg_corpus + " " + pos_corpus + " " + null_corpus
+
+        data_list.append([aug_corpus, aug_label])
+
     # random shuffle
     random.shuffle(data_list)
 
@@ -374,8 +427,7 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
          'weight_decay': 0.01},
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
-    optimizer = torch.optim.Adam(model.parameters(), lr=opt["learning_rate"])
-    # optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning_rate"])
+    optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning_rate"])
 
     # loss function - Cross Entropy
     loss_function = torch.nn.CrossEntropyLoss()
@@ -395,14 +447,13 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             sentence_info[idx] = tuple_item + (train_label_list[idx],)
         batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
                                                    num_workers=0, shuffle=True)
-        """
         if e == 0:
             # only first epoch
             # warmup scheduler
             t_total = len(batch_loader) * opt["num_epochs"]  # size of batch...
             warmup_steps = int(t_total * opt["warmup_ratio"])
             scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
-        """
+
         # Train Batch
         model.train()
         for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(batch_loader):
@@ -429,7 +480,7 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             # optimization
             torch.nn.utils.clip_grad_norm_(model.parameters(), opt["max_grad_norm"])
             optimizer.step()
-            # scheduler.step()  # Update learning rate schedule
+            scheduler.step()  # Update learning rate schedule
 
             accuracy_0 = md.calculate_accuracy(out_1, label[:, 0])
             accuracy_1 = md.calculate_accuracy(out_2, label[:, 1])
