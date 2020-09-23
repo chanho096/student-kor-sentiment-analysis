@@ -39,6 +39,7 @@ def corpus_analysis(ctx="cuda:0"):
     print(result_label_1)
     print(result_label_2)
     return
+
     while True:
         print("### Aspect: [", end="")
         for aspect in MOVIE_ASPECT[:-1]:

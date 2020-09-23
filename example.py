@@ -102,18 +102,19 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         else:
             neg_dataset.append(data)
     min_count = min(len(pos_dataset), len(neg_dataset))
+    num_counter_case = min_count * 3
 
     # random value
     rnd_0 = np.random.uniform(0, 1, len(dataset)) > 0.5
     rnd_1 = np.random.randint(0, len(dataset) - 1, len(dataset))
     rnd_2 = np.random.uniform(0, 1, len(dataset)) > 0.5
-    # rnd_3 = np.random.randint(0, len(neg_dataset), len(pos_dataset))
-    rnd_4 = np.random.randint(0, 256, len(pos_dataset))
+    rnd_3 = np.random.uniform(0, 1, num_counter_case) > 0.5
+    rnd_4 = np.random.randint(0, 256, num_counter_case)
     rnd_5 = np.random.uniform(0, 1, len(dataset)) > 0.5
     rnd_6 = np.random.randint(0, 256, len(dataset))
     rnd_7 = np.random.randint(0, 256, len(dataset)) > 0.5
-    rnd_8 = np.random.randint(0, len(pos_dataset), min_count * 2)
-    rnd_9 = np.random.randint(0, len(neg_dataset), min_count * 2)
+    rnd_8 = np.random.randint(0, len(pos_dataset), num_counter_case)
+    rnd_9 = np.random.randint(0, len(neg_dataset), num_counter_case)
 
     # split by list
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
@@ -181,11 +182,17 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         data_list.append([aug_corpus, aug_label])
 
     # augmented data - counter double
-    for idx in range(0, min_count * 2):
+    for idx in range(0, num_counter_case):
         pos_corpus, pos_aspect, _ = pos_dataset[rnd_8[idx]]
         neg_corpus, neg_aspect, _ = neg_dataset[rnd_9[idx]]
+
         pos_label_number = 2
         neg_label_number = 0
+
+        if rnd_3[idx]:
+            data_list.append([pos_corpus + " " + neg_corpus, [1, 1]])
+        else:
+            data_list.append([neg_corpus + " " + pos_corpus, [1, 1]])
 
         if rnd_4[idx] % 4 == 0:
             left_corpus = pos_corpus.replace(pos_aspect, object_text_0, 3)
@@ -337,7 +344,7 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
                 test_accuracy += md.calculate_accuracy(out_0, label[:, 0])
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
-        torch.save(model.state_dict(), f"trained_model_{e}.pt")
+        torch.save(model.state_dict(), f"pre_trained_model_{e+1}.pt")
 
 
 def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
@@ -350,16 +357,6 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
           f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
           f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
-
-    opt_tmp = ABSA_model.opt.copy()
-    ABSA_model.opt["object_text_0"] = opt_tmp["object_text_1"]
-    ABSA_model.opt["object_text_1"] = opt_tmp["object_text_0"]
-
-    r1, r2, r3 = _model_validation(ABSA_model)
-    print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
-          f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
-          f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
-    ABSA_model.opt = opt_tmp
 
     # load dataset
     total_dataset = nlp.data.TSVDataset("sentiment_dataset.csv", field_indices=[0, 1, 3], num_discard_samples=1)
@@ -377,7 +374,8 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
          'weight_decay': 0.01},
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
-    optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning_rate"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=opt["learning_rate"])
+    # optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning_rate"])
 
     # loss function - Cross Entropy
     loss_function = torch.nn.CrossEntropyLoss()
@@ -397,14 +395,14 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             sentence_info[idx] = tuple_item + (train_label_list[idx],)
         batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
                                                    num_workers=0, shuffle=True)
-
+        """
         if e == 0:
             # only first epoch
             # warmup scheduler
             t_total = len(batch_loader) * opt["num_epochs"]  # size of batch...
             warmup_steps = int(t_total * opt["warmup_ratio"])
             scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
-
+        """
         # Train Batch
         model.train()
         for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(batch_loader):
@@ -431,7 +429,7 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             # optimization
             torch.nn.utils.clip_grad_norm_(model.parameters(), opt["max_grad_norm"])
             optimizer.step()
-            scheduler.step()  # Update learning rate schedule
+            # scheduler.step()  # Update learning rate schedule
 
             accuracy_0 = md.calculate_accuracy(out_1, label[:, 0])
             accuracy_1 = md.calculate_accuracy(out_2, label[:, 1])
@@ -449,18 +447,7 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
               f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
               f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
 
-        opt_tmp = ABSA_model.opt.copy()
-        ABSA_model.opt["object_text_0"] = opt_tmp["object_text_1"]
-        ABSA_model.opt["object_text_1"] = opt_tmp["object_text_0"]
-
-        r1, r2, r3 = _model_validation(ABSA_model)
-        print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
-              f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
-              f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
-        ABSA_model.opt = opt_tmp
-
-        if e % 2 == 0:
-            torch.save(model.state_dict(), f"trained_model_{e}.pt")
+        torch.save(model.state_dict(), f"trained_model_{e+1}.pt")
 
 
 def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
@@ -511,22 +498,4 @@ def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
-    """
-    ABSA_model = ABSAModel(ctx="cuda:0")
-    ABSA_model.load_kobert()
-    ABSA_model.load_model(model_path=ABSA_model_path)
-    r1, r2, r3 = _model_validation(ABSA_model)
-    print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
-          f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
-          f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
-
-    opt_tmp = ABSA_model.opt.copy()
-    ABSA_model.opt["object_text_0"] = opt_tmp["object_text_1"]
-    ABSA_model.opt["object_text_1"] = opt_tmp["object_text_0"]
-    r1, r2, r3 = _model_validation(ABSA_model)
-    print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
-          f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
-          f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
-    """
-
     ex_model_training()
