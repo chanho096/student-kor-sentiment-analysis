@@ -101,16 +101,19 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
             pos_dataset.append(data)
         else:
             neg_dataset.append(data)
+    min_count = min(len(pos_dataset), len(neg_dataset))
 
     # random value
     rnd_0 = np.random.uniform(0, 1, len(dataset)) > 0.5
     rnd_1 = np.random.randint(0, len(dataset) - 1, len(dataset))
     rnd_2 = np.random.uniform(0, 1, len(dataset)) > 0.5
-    rnd_3 = np.random.randint(0, len(neg_dataset), len(pos_dataset))
+    # rnd_3 = np.random.randint(0, len(neg_dataset), len(pos_dataset))
     rnd_4 = np.random.randint(0, 256, len(pos_dataset))
     rnd_5 = np.random.uniform(0, 1, len(dataset)) > 0.5
     rnd_6 = np.random.randint(0, 256, len(dataset))
     rnd_7 = np.random.randint(0, 256, len(dataset)) > 0.5
+    rnd_8 = np.random.randint(0, len(pos_dataset), min_count * 2)
+    rnd_9 = np.random.randint(0, len(neg_dataset), min_count * 2)
 
     # split by list
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
@@ -178,8 +181,9 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         data_list.append([aug_corpus, aug_label])
 
     # augmented data - counter double
-    for idx, (pos_corpus, pos_aspect, _) in enumerate(pos_dataset):
-        neg_corpus, neg_aspect, _ = neg_dataset[rnd_3[idx]]
+    for idx in range(0, min_count * 2):
+        pos_corpus, pos_aspect, _ = pos_dataset[rnd_8[idx]]
+        neg_corpus, neg_aspect, _ = neg_dataset[rnd_9[idx]]
         pos_label_number = 2
         neg_label_number = 0
 
@@ -391,7 +395,8 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
         for idx, tuple_item in enumerate(sentence_info):
             sentence_info[idx] = tuple_item + (train_label_list[idx],)
-        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"], num_workers=0)
+        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
+                                                   num_workers=0, shuffle=True)
 
         if e == 0:
             # only first epoch
