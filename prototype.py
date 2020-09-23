@@ -30,7 +30,15 @@ def corpus_analysis(ctx="cuda:0"):
 
     print("\n##### Aspect-based Sentiment Analysis")
     print("##### 2020-09-14, Team 리프")
-
+    sentence_info = model.tokenize(["대상이 좋다", "측면이 좋다"])
+    _, result_1, result_2 = model.analyze(sentence_info, sa=False, absa=True)
+    result_label_1 = np.argmax(result_1, axis=1)
+    result_label_2 = np.argmax(result_2, axis=1)
+    print(result_1)
+    print(result_2)
+    print(result_label_1)
+    print(result_label_2)
+    return
     while True:
         print("### Aspect: [", end="")
         for aspect in MOVIE_ASPECT[:-1]:

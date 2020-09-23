@@ -1,5 +1,3 @@
-import kobert.pytorch_kobert
-import kobert.utils
 import loader
 from masa.model import ABSAModel
 import masa.model as md
@@ -112,6 +110,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
     rnd_4 = np.random.randint(0, 256, len(pos_dataset))
     rnd_5 = np.random.uniform(0, 1, len(dataset)) > 0.5
     rnd_6 = np.random.randint(0, 256, len(dataset))
+    rnd_7 = np.random.randint(0, 256, len(dataset)) > 0.5
 
     # split by list
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
@@ -131,13 +130,13 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         # augmented data - single +
         if rnd_5[idx]:
             if rnd_6[idx] % 4 == 0:
-                aug_corpus = corpus.replace(aspect, object_text_0 + ", " + object_text_1)
+                aug_corpus = corpus.replace(aspect, object_text_0 + ", " + object_text_1, 3)
             elif rnd_6[idx] % 4 == 1:
-                aug_corpus = corpus.replace(aspect, object_text_1 + ", " + object_text_0)
+                aug_corpus = corpus.replace(aspect, object_text_1 + ", " + object_text_0, 3)
             elif rnd_6[idx] % 4 == 2:
-                aug_corpus = corpus.replace(aspect, object_text_0 + " " + object_text_1)
+                aug_corpus = corpus.replace(aspect, object_text_0 + " " + object_text_1, 3)
             else:
-                aug_corpus = corpus.replace(aspect, object_text_1 + ", " + object_text_0)
+                aug_corpus = corpus.replace(aspect, object_text_1 + ", " + object_text_0, 3)
 
             aug_label = [label_number, label_number]
             data_list.append([aug_corpus, aug_label])
@@ -147,6 +146,25 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         corpus_1, aspect_1, label_1 = dataset[rnd_1[idx]]
         label_number_1 = 2 if label_1 == "positive" else 0
 
+        # double null
+        data_list.append([corpus + " " + corpus_1, [1, 1]])
+
+        # null - mask
+        if rnd_7[idx] % 4 == 0:
+            aug_corpus = corpus.replace(aspect, object_text_0, 3) + " " + corpus_1
+            aug_label = [label_number, 1]
+        elif rnd_7[idx] % 4 == 1:
+            aug_corpus = corpus + " " + corpus_1.replace(aspect_1, object_text_0, 3)
+            aug_label = [label_number_1, 1]
+        elif rnd_7[idx] % 4 == 2:
+            aug_corpus = corpus.replace(aspect, object_text_1, 3) + " " + corpus_1
+            aug_label = [1, label_number]
+        else:
+            aug_corpus = corpus + " " + corpus_1.replace(aspect_1, object_text_1, 3)
+            aug_label = [1, label_number_1]
+        data_list.append([aug_corpus, aug_label])
+
+        # double mask
         if rnd_2[idx]:
             aug_text_0 = object_text_0
             aug_text_1 = object_text_1
@@ -201,7 +219,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
 def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
-    ABSA_model.load_model(model_path=None)
+    ABSA_model.load_model(model_path=ABSA_model_path)
 
     # ---------------------- Data Loader -----------------------
     # ----------------------------------------------------------
@@ -309,7 +327,7 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
                 x = word_embedding(token_ids)
 
                 # forward propagation
-                out_0, _, _ = model(x, segment_ids, attention_mask, sa=True, absa=False)
+                out_0, out_1, out_2 = model(x, segment_ids, attention_mask, sa=True, absa=True)
 
                 # test accuracy
                 test_accuracy += md.calculate_accuracy(out_0, label[:, 0])
@@ -322,6 +340,22 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
     ABSA_model.load_model(model_path=ABSA_model_path)
+
+    # Validation
+    r1, r2, r3 = _model_validation(ABSA_model)
+    print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
+          f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
+          f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
+
+    opt_tmp = ABSA_model.opt.copy()
+    ABSA_model.opt["object_text_0"] = opt_tmp["object_text_1"]
+    ABSA_model.opt["object_text_1"] = opt_tmp["object_text_0"]
+
+    r1, r2, r3 = _model_validation(ABSA_model)
+    print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
+          f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
+          f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
+    ABSA_model.opt = opt_tmp
 
     # load dataset
     total_dataset = nlp.data.TSVDataset("sentiment_dataset.csv", field_indices=[0, 1, 3], num_discard_samples=1)
@@ -410,6 +444,16 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
               f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
               f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
 
+        opt_tmp = ABSA_model.opt.copy()
+        ABSA_model["object_text_0"] = opt_tmp["object_text_1"]
+        ABSA_model["object_text_1"] = opt_tmp["object_text_0"]
+
+        r1, r2, r3 = _model_validation(ABSA_model)
+        print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
+              f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
+              f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
+        ABSA_model.opy = opt_tmp
+
         if e % 2 == 0:
             torch.save(model.state_dict(), f"trained_model_{e}.pt")
 
@@ -462,4 +506,22 @@ def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
+    """
+    ABSA_model = ABSAModel(ctx="cuda:0")
+    ABSA_model.load_kobert()
+    ABSA_model.load_model(model_path=ABSA_model_path)
+    r1, r2, r3 = _model_validation(ABSA_model)
+    print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
+          f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
+          f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
+
+    opt_tmp = ABSA_model.opt.copy()
+    ABSA_model.opt["object_text_0"] = opt_tmp["object_text_1"]
+    ABSA_model.opt["object_text_1"] = opt_tmp["object_text_0"]
+    r1, r2, r3 = _model_validation(ABSA_model)
+    print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
+          f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
+          f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
+    """
+
     ex_model_training()

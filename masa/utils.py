@@ -15,6 +15,10 @@ def gen_aspect_mask(corpus_list, opt, sim_aspects):
     mask = [opt["object_text_0"], opt["object_text_1"]]
 
     for corpus_idx, corpus in enumerate(corpus_list):
+        # mask 제거
+        corpus = corpus.replace(mask[0], "", 3)
+        corpus = corpus.replace(mask[1], "", 3)
+
         asp = np.zeros((len(sim_aspects), 1), dtype=np.int32)
 
         for idx, aspect_list in enumerate(sim_aspects):
