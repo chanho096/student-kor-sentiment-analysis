@@ -54,7 +54,7 @@ class ABSAClassifier(torch.nn.Module):
                  bert,
                  sa_classifier=None,
                  hidden_size=768,
-                 num_classes=3,
+                 num_classes=2,
                  dr_rate_0=None,
                  dr_rate_1=None,
                  ):

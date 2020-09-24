@@ -354,8 +354,6 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
 
             # set label array
             label_array = np.array([label, label, label], dtype=np.int32)
-            label_array[1] = label_array[1] * 2  # 0->0, 1->2
-            label_array[2] = label_array[2] * 2  # 0->0, 1->2
 
             # set label list
             label_list.append(label_array)
@@ -602,4 +600,4 @@ def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
-    ex_model_training()
+    ex_pre_training()
