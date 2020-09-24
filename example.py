@@ -120,7 +120,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
         # Augmented Data - single
         # single case - 중립 데이터 생성
-        data_list.append([corpus, [1, 1]])
+        # data_list.append([corpus, [1, 1]])
         
         # single case - 대립 데이터 생성
         label_number = 2 if label == "positive" else 0
@@ -152,7 +152,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         label_number_1 = 2 if label_1 == "positive" else 0
 
         # pair case - 완전 중립 데이터 생성
-        data_list.append([corpus + " " + corpus_1, [1, 1]])
+        # data_list.append([corpus + " " + corpus_1, [1, 1]])
 
         # pair case - 부분 중립 데이터 생성
         if rnd_7[idx] % 4 == 0:
@@ -167,7 +167,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         else:
             aug_corpus = corpus + " " + corpus_1.replace(aspect_1, object_text_1, 3)
             aug_label = [1, label_number_1]
-        data_list.append([aug_corpus, aug_label])
+        # data_list.append([aug_corpus, aug_label])
 
         # pair case - 대립 데이터 생성
         if rnd_2[idx]:
@@ -212,10 +212,12 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         data_list.append([aug_corpus, aug_label])
         
         # counter pair case - 완전 중립 데이터 생성
+        '''
         if rnd_3[idx]:
             data_list.append([pos_corpus + " " + neg_corpus, [1, 1]])
         else:
             data_list.append([neg_corpus + " " + pos_corpus, [1, 1]])
+        '''
 
         # counter pair case - 부분 중립 데이터 생성
         # random case 1. 마스크 단어 선택
@@ -244,7 +246,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         aug_label = [1, 1]
         aug_label[aug_label_idx] = target_label
 
-        data_list.append([aug_corpus, aug_label])
+        # data_list.append([aug_corpus, aug_label])
 
     # Augmented Data - counter triple
     short_pos_dataset = []
@@ -297,12 +299,12 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         else:
             aug_corpus = neg_corpus + " " + pos_corpus + " " + null_corpus
 
-        data_list.append([aug_corpus, [1, 1]])
+        # data_list.append([aug_corpus, [1, 1]])
 
+        # counter triple case - 대립 데이터 생성
         pos_corpus = pos_corpus.replace(pos_aspect, pos_text, 3)
         neg_corpus = neg_corpus.replace(neg_aspect, neg_text, 3)
 
-        # counter triple case - 대립 데이터 생성
         if rnd_case_2[idx] % 6 == 0:
             aug_corpus = pos_corpus + " " + null_corpus + " " + neg_corpus
         elif rnd_case_2[idx] % 6 == 1:

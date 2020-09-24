@@ -1,18 +1,22 @@
 import numpy as np
 
 
-def gen_aspect_mask(corpus_list, opt, sim_aspects):
+def gen_aspect_mask(corpus_list, opt, sim_aspects, inverse=False):
     """
         말뭉치 데이터를 이용하여 ABSA Model 입력 데이터 생성
 
         ##### parms info #####
         corpus_list: list type - string set
         sim_aspects: double list type - similar word dictionary
+        inverse: mask 생성 패턴 반전 여부
     """
 
     masked_corpus_list = []
     masked_corpus_info = []
-    mask = [opt["object_text_0"], opt["object_text_1"]]
+    if inverse:
+        mask = [opt["object_text_1"], opt["object_text_0"]]
+    else:
+        mask = [opt["object_text_0"], opt["object_text_1"]]
 
     for corpus_idx, corpus in enumerate(corpus_list):
         # mask 제거
@@ -42,7 +46,10 @@ def gen_aspect_mask(corpus_list, opt, sim_aspects):
                 replaced_corpus = replaced_corpus.replace(aspect, mask[0], 3)
 
             masked_corpus_list.append(replaced_corpus)
-            masked_corpus_info.append([corpus_idx, asp_idx, -1])
+            if inverse:
+                masked_corpus_info.append([corpus_idx, -1, asp_idx])
+            else:
+                masked_corpus_info.append([corpus_idx, asp_idx, -1])
             idx = idx + 1
 
         # 짝수개의 aspect 를 치환
@@ -58,7 +65,10 @@ def gen_aspect_mask(corpus_list, opt, sim_aspects):
                 replaced_corpus = replaced_corpus.replace(aspect, mask[1], 3)
 
             masked_corpus_list.append(replaced_corpus)
-            masked_corpus_info.append([corpus_idx, asp_idx_0, asp_idx_1])
+            if inverse:
+                masked_corpus_info.append([corpus_idx, asp_idx_1, asp_idx_0])
+            else:
+                masked_corpus_info.append([corpus_idx, asp_idx_0, asp_idx_1])
             idx = idx + 2
 
     return masked_corpus_list, masked_corpus_info
