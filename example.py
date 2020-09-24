@@ -91,9 +91,8 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
 
     # --------------- DATA AUGMENTATION FOR ABSA ---------------
     # ----------------------------------------------------------
-    data_list = []
-
     # get dataset with data augmentation
+    data_list = []
     pos_dataset = []
     neg_dataset = []
     for data in dataset:
@@ -102,7 +101,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         else:
             neg_dataset.append(data)
 
-    num_counter_case = len(dataset) * 3
+    num_counter_case = len(dataset) * 2
 
     # random value
     rnd_0 = np.random.uniform(0, 1, len(dataset)) > 0.5
@@ -115,13 +114,15 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
     rnd_7 = np.random.randint(0, 256, len(dataset)) > 0.5
     rnd_8 = np.random.randint(0, len(pos_dataset), num_counter_case)
     rnd_9 = np.random.randint(0, len(neg_dataset), num_counter_case)
+    rnd_10 = np.random.uniform(0, 1, (num_counter_case, 3)) > 0.5
 
     # split by list
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
-        # original data
+        # Augmented Data - single
+        # single case - 중립 데이터 생성
         data_list.append([corpus, [1, 1]])
-
-        # augmented data - single
+        
+        # single case - 대립 데이터 생성
         label_number = 2 if label == "positive" else 0
         if rnd_0[idx]:
             aug_corpus = corpus.replace(aspect, object_text_0, 3)
@@ -131,7 +132,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
             aug_label = [1, label_number]
         data_list.append([aug_corpus, aug_label])
 
-        # augmented data - single +
+        # single case - 일치 데이터 생성
         if rnd_5[idx]:
             if rnd_6[idx] % 4 == 0:
                 aug_corpus = corpus.replace(aspect, object_text_0 + ", " + object_text_1, 3)
@@ -145,15 +146,15 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
             aug_label = [label_number, label_number]
             data_list.append([aug_corpus, aug_label])
 
-        # augmented data - double
+        # Augmented Data - pair
         rnd_1[idx] = len(dataset) - 1 if rnd_1[idx] == idx else rnd_1[idx]
         corpus_1, aspect_1, label_1 = dataset[rnd_1[idx]]
         label_number_1 = 2 if label_1 == "positive" else 0
 
-        # double null
+        # pair case - 완전 중립 데이터 생성
         data_list.append([corpus + " " + corpus_1, [1, 1]])
 
-        # null - mask
+        # pair case - 부분 중립 데이터 생성
         if rnd_7[idx] % 4 == 0:
             aug_corpus = corpus.replace(aspect, object_text_0, 3) + " " + corpus_1
             aug_label = [label_number, 1]
@@ -168,7 +169,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
             aug_label = [1, label_number_1]
         data_list.append([aug_corpus, aug_label])
 
-        # double mask
+        # pair case - 대립 데이터 생성
         if rnd_2[idx]:
             aug_text_0 = object_text_0
             aug_text_1 = object_text_1
@@ -181,7 +182,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         aug_corpus = corpus.replace(aspect, aug_text_0, 3) + " " + corpus_1.replace(aspect_1, aug_text_1, 3)
         data_list.append([aug_corpus, aug_label])
 
-    # augmented data - counter double
+    # Augmented Data - counter pair
     for idx in range(0, num_counter_case):
         pos_corpus, pos_aspect, _ = pos_dataset[rnd_8[idx]]
         neg_corpus, neg_aspect, _ = neg_dataset[rnd_9[idx]]
@@ -189,11 +190,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         pos_label_number = 2
         neg_label_number = 0
 
-        if rnd_3[idx]:
-            data_list.append([pos_corpus + " " + neg_corpus, [1, 1]])
-        else:
-            data_list.append([neg_corpus + " " + pos_corpus, [1, 1]])
-
+        # counter pair case - 대립 데이터 생성
         if rnd_4[idx] % 4 == 0:
             left_corpus = pos_corpus.replace(pos_aspect, object_text_0, 3)
             right_corpus = neg_corpus.replace(neg_aspect, object_text_1, 3)
@@ -213,12 +210,48 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
 
         aug_corpus = left_corpus + " " + right_corpus
         data_list.append([aug_corpus, aug_label])
+        
+        # counter pair case - 완전 중립 데이터 생성
+        if rnd_3[idx]:
+            data_list.append([pos_corpus + " " + neg_corpus, [1, 1]])
+        else:
+            data_list.append([neg_corpus + " " + pos_corpus, [1, 1]])
 
-    # augmented data - counter triple
+        # counter pair case - 부분 중립 데이터 생성
+        # random case 1. 마스크 단어 선택
+        if rnd_10[idx, 0]:
+            aug_text = object_text_0
+            aug_label_idx = 0
+        else:
+            aug_text = object_text_1
+            aug_label_idx = 1
+
+        # random case 2. 긍정/부정 문장 중 중립값 선택
+        if rnd_10[idx, 1]:
+            null_corpus = pos_corpus
+            target_corpus = neg_corpus.replace(neg_aspect, aug_text)
+            target_label = 0
+        else:
+            null_corpus = neg_corpus
+            target_corpus = pos_corpus.replace(pos_aspect, aug_text)
+            target_label = 2
+        
+        # random case 3. 중립 문장의 왼쪽/오른쪽 결합 선택
+        if rnd_10[idx, 2]:
+            aug_corpus = null_corpus + " " + target_corpus
+        else:
+            aug_corpus = target_corpus + " " + null_corpus
+        aug_label = [1, 1]
+        aug_label[aug_label_idx] = target_label
+
+        data_list.append([aug_corpus, aug_label])
+
+    # Augmented Data - counter triple
     short_pos_dataset = []
     short_neg_dataset = []
     short_dataset = []
     for data in dataset:
+        # 짧은 문장 데이터만을 추출한다.
         if len(data[0]) > 32:
             continue
 
@@ -228,7 +261,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
             short_neg_dataset.append(data)
         short_dataset.append(data)
 
-    num_triple_counter_case = len(short_dataset) * 2 * 3
+    num_triple_counter_case = len(short_dataset) * 3
     rnd_pos = np.random.randint(0, len(short_pos_dataset), num_triple_counter_case)
     rnd_neg = np.random.randint(0, len(short_neg_dataset), num_triple_counter_case)
     rnd_null = np.random.randint(0, len(short_dataset), num_triple_counter_case)
@@ -249,7 +282,8 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         pos_corpus, pos_aspect, _ = short_pos_dataset[rnd_pos[idx]]
         neg_corpus, neg_aspect, _ = short_neg_dataset[rnd_neg[idx]]
         null_corpus, _, _ = short_dataset[rnd_null[idx]]
-
+        
+        # counter triple case - 완전 중립 데이터 생성
         if rnd_case_1[idx] % 6 == 0:
             aug_corpus = pos_corpus + " " + null_corpus + " " + neg_corpus
         elif rnd_case_1[idx] % 6 == 1:
@@ -268,6 +302,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         pos_corpus = pos_corpus.replace(pos_aspect, pos_text, 3)
         neg_corpus = neg_corpus.replace(neg_aspect, neg_text, 3)
 
+        # counter triple case - 대립 데이터 생성
         if rnd_case_2[idx] % 6 == 0:
             aug_corpus = pos_corpus + " " + null_corpus + " " + neg_corpus
         elif rnd_case_2[idx] % 6 == 1:
