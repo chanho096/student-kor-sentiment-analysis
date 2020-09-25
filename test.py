@@ -1,6 +1,7 @@
 import loader
 import torch
 import numpy as np
+import random
 
 import kobert.pytorch_kobert
 import masa.model
@@ -146,8 +147,14 @@ def ex_dp_training(ctx="cuda:0", opt=masa.model.DEFAULT_OPTION):
     for idx, tuple_item in enumerate(sentence_info):
         sentence_info[idx] = tuple_item + (label_list[idx][0], label_list[idx][1], )
 
-    batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
-                                               num_workers=0, shuffle=True)
+    random.shuffle(sentence_info)
+    validation_rate = 0.1
+    val_idx = int(len(sentence_info) * validation_rate)
+
+    test_batch_loader = torch.utils.data.DataLoader(sentence_info[:val_idx], batch_size=opt["batch_size"],
+                                                    num_workers=0, shuffle=True)
+    train_batch_loader = torch.utils.data.DataLoader(sentence_info[val_idx:], batch_size=opt["batch_size"],
+                                                     num_workers=0, shuffle=True)
 
     # ------------------------------------------
     # model
@@ -175,7 +182,7 @@ def ex_dp_training(ctx="cuda:0", opt=masa.model.DEFAULT_OPTION):
 
         # Train Batch
         model.train()
-        for batch_id, (token_ids, valid_length, segment_ids, label_0, label_1) in enumerate(batch_loader):
+        for batch_id, (token_ids, valid_length, segment_ids, label_0, label_1) in enumerate(train_batch_loader):
             optimizer.zero_grad()
 
             # set train batch
@@ -219,6 +226,43 @@ def ex_dp_training(ctx="cuda:0", opt=masa.model.DEFAULT_OPTION):
                                                                               loss.data.cpu().numpy(),
                                                                               train_accuracy / (batch_id + 1)))
         print("epoch {} train accuracy {}".format(e + 1, train_accuracy / (batch_id + 1)))
+
+        # Test Batch
+        model.eval()
+        with torch.no_grad():
+            for batch_id, (token_ids, valid_length, segment_ids, label_0, label_1) in enumerate(test_batch_loader):
+                # set test batch
+                token_ids = token_ids.long().to(device)
+                segment_ids = segment_ids.long().to(device)
+                valid_length = valid_length
+                label_0 = label.long().to(device)
+                label_1 = label.long().to(device)
+
+                # get word embedding
+                attention_mask = md.gen_attention_mask(token_ids, valid_length)
+                word_embedding = model.bert.get_input_embeddings()
+                x = word_embedding(token_ids)
+
+                # forward propagation
+                word_vector, result_0, result_1 = model(x, segment_ids, attention_mask)
+
+                # backward propagation
+                loss = lf(result_0[0], label_0[:, 0])
+                for idx, result in enumerate(result_0[1:]):
+                    loss = loss + lf(result, label_0[:, idx + 1])
+                for idx, result in enumerate(result_1):
+                    loss = loss + lf(result, label_1[:, idx])
+
+                # test accuracy
+                batch_accuracy = 0
+                for idx, result in enumerate(result_0):
+                    batch_accuracy += masa.model.calculate_accuracy(result, label_0[:, idx])
+                for idx, result in enumerate(result_1):
+                    batch_accuracy += masa.model.calculate_accuracy(result, label_1[:, idx])
+                batch_accuracy = batch_accuracy / (len(result_0) + len(result_1))
+                test_accuracy += batch_accuracy
+
+            print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
         torch.save(model.state_dict(), f"pre_trained_model_{e + 1}.pt")
 
