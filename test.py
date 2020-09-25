@@ -205,7 +205,14 @@ def ex_dp_training(ctx="cuda:0", opt=masa.model.DEFAULT_OPTION):
             torch.nn.utils.clip_grad_norm_(model.parameters(), opt["max_grad_norm"])
             optimizer.step()
             scheduler.step()  # Update learning rate schedule
-            train_accuracy += masa.model.calculate_accuracy(out_0, label[:, 0])
+
+            batch_accuracy = 0
+            for idx, result in enumerate(result_0):
+                batch_accuracy += masa.model.calculate_accuracy(result, label_0[:, idx])
+            for idx, result in enumerate(result_1):
+                batch_accuracy += masa.model.calculate_accuracy(result, label_1[:, idx])
+            batch_accuracy = batch_accuracy / (len(result_0) + len(result_1))
+            train_accuracy += batch_accuracy
 
             if batch_id % opt["log_interval"] == 0:
                 print("epoch {} batch id {} loss {} train accuracy {}".format(e + 1, batch_id + 1,
