@@ -122,15 +122,15 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         # single case - 중립 데이터 생성
         # data_list.append([corpus, [1, 1]])
         
-        # single case - 대립 데이터 생성
-        label_number = 2 if label == "positive" else 0
+        # single case - 부분 중립 데이터 생성
+        label_number = 1 if label == "positive" else 0
         if rnd_0[idx]:
             aug_corpus = corpus.replace(aspect, object_text_0, 3)
             aug_label = [label_number, 1]
         else:
             aug_corpus = corpus.replace(aspect, object_text_1, 3)
             aug_label = [1, label_number]
-        data_list.append([aug_corpus, aug_label])
+        # data_list.append([aug_corpus, aug_label])
 
         # single case - 일치 데이터 생성
         if rnd_5[idx]:
@@ -149,7 +149,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         # Augmented Data - pair
         rnd_1[idx] = len(dataset) - 1 if rnd_1[idx] == idx else rnd_1[idx]
         corpus_1, aspect_1, label_1 = dataset[rnd_1[idx]]
-        label_number_1 = 2 if label_1 == "positive" else 0
+        label_number_1 = 1 if label_1 == "positive" else 0
 
         # pair case - 완전 중립 데이터 생성
         # data_list.append([corpus + " " + corpus_1, [1, 1]])
@@ -341,7 +341,7 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     # ---------------------- Data Loader -----------------------
     # ----------------------------------------------------------
     # Naver sentiment movie corpus v1.0
-    data_path = loader.download_corpus_data()
+    data_path = loader.download_movie_corpus_data()
 
     batch_loaders = []
     for path in data_path:
@@ -455,12 +455,6 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
     ABSA_model.load_model(model_path=ABSA_model_path)
-
-    # Validation
-    r1, r2, r3 = _model_validation(ABSA_model)
-    print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
-          f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
-          f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
 
     # load dataset
     total_dataset = nlp.data.TSVDataset("sentiment_dataset.csv", field_indices=[0, 1, 3], num_discard_samples=1)
@@ -600,4 +594,4 @@ def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
-    ex_pre_training()
+    ex_model_training()

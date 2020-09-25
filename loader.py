@@ -25,11 +25,11 @@ def download_movie_corpus_data():
 
     # download train/test corpus data
     if not os.path.isfile(train_data_path):
-        print(f"Download URL: {train_data_url}\n")
+        print(f"Download URL: {train_data_url}")
         urlretrieve(train_data_url, train_data_path)
 
     if not os.path.isfile(test_data_path):
-        print(f"Download URL: {test_data_url}\n")
+        print(f"Download URL: {test_data_url}")
         urlretrieve(test_data_url, test_data_path)
 
     return train_data_path, test_data_path
