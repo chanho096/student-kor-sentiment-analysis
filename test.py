@@ -170,7 +170,7 @@ def ex_dp_training(ctx="cuda:0", opt=masa.model.DEFAULT_OPTION):
     optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning_rate"])
     lf = torch.nn.CrossEntropyLoss()
 
-    t_total = len(batch_loader) * opt["num_epochs"]
+    t_total = len(train_batch_loader) * opt["num_epochs"]
     warmup_steps = int(t_total * opt["warmup_ratio"])
     scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
 
