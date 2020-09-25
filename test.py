@@ -235,11 +235,11 @@ def ex_dp_training(ctx="cuda:0", opt=masa.model.DEFAULT_OPTION):
                 token_ids = token_ids.long().to(device)
                 segment_ids = segment_ids.long().to(device)
                 valid_length = valid_length
-                label_0 = label.long().to(device)
-                label_1 = label.long().to(device)
+                label_0 = label_0.long().to(device)
+                label_1 = label_1.long().to(device)
 
                 # get word embedding
-                attention_mask = md.gen_attention_mask(token_ids, valid_length)
+                attention_mask = masa.model.gen_attention_mask(token_ids, valid_length)
                 word_embedding = model.bert.get_input_embeddings()
                 x = word_embedding(token_ids)
 

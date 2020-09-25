@@ -118,7 +118,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
 
     rnd_obj_0 = np.random.randint(0, 2, len(dataset))
     rnd_obj_1 = np.random.randint(0, 2, len(dataset))
-    rnd_obj_2 = np.random.randint(0, 2, len(dataset))
+    rnd_obj_2 = np.random.randint(0, 2, num_counter_case)
 
     # split by list
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
@@ -130,10 +130,10 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         label_number = 1 if label == "positive" else 0
         if rnd_0[idx]:
             aug_corpus = corpus.replace(aspect, object_text_0, 3)
-            aug_label = [label_number, rnd_obj_0]
+            aug_label = [label_number, rnd_obj_0[idx]]
         else:
             aug_corpus = corpus.replace(aspect, object_text_1, 3)
-            aug_label = [rnd_obj_0, label_number]
+            aug_label = [rnd_obj_0[idx], label_number]
         data_list.append([aug_corpus, aug_label])
 
         # single case - 일치 데이터 생성
@@ -161,16 +161,16 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         # pair case - 부분 중립 데이터 생성
         if rnd_7[idx] % 4 == 0:
             aug_corpus = corpus.replace(aspect, object_text_0, 3) + " " + corpus_1
-            aug_label = [label_number, rnd_obj_1]
+            aug_label = [label_number, rnd_obj_1[idx]]
         elif rnd_7[idx] % 4 == 1:
             aug_corpus = corpus + " " + corpus_1.replace(aspect_1, object_text_0, 3)
-            aug_label = [label_number_1, rnd_obj_1]
+            aug_label = [label_number_1, rnd_obj_1[idx]]
         elif rnd_7[idx] % 4 == 2:
             aug_corpus = corpus.replace(aspect, object_text_1, 3) + " " + corpus_1
-            aug_label = [rnd_obj_1, label_number]
+            aug_label = [rnd_obj_1[idx], label_number]
         else:
             aug_corpus = corpus + " " + corpus_1.replace(aspect_1, object_text_1, 3)
-            aug_label = [rnd_obj_1, label_number_1]
+            aug_label = [rnd_obj_1[idx], label_number_1]
         # data_list.append([aug_corpus, aug_label])
 
         # pair case - 대립 데이터 생성
@@ -247,7 +247,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
             aug_corpus = null_corpus + " " + target_corpus
         else:
             aug_corpus = target_corpus + " " + null_corpus
-        aug_label = [rnd_obj_2, rnd_obj_2]
+        aug_label = [rnd_obj_2[idx], rnd_obj_2[idx]]
         aug_label[aug_label_idx] = target_label
 
         # data_list.append([aug_corpus, aug_label])
