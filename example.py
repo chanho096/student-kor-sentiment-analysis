@@ -116,6 +116,9 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
     rnd_9 = np.random.randint(0, len(neg_dataset), num_counter_case)
     rnd_10 = np.random.uniform(0, 1, (num_counter_case, 3)) > 0.5
 
+    rnd_obj_0 = np.random.randint(0, 2, len(dataset))
+    rnd_obj_1 = np.random.randint(0, 2, len(dataset))
+
     # split by list
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
         # Augmented Data - single
@@ -126,11 +129,11 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         label_number = 1 if label == "positive" else 0
         if rnd_0[idx]:
             aug_corpus = corpus.replace(aspect, object_text_0, 3)
-            aug_label = [label_number, 1]
+            aug_label = [label_number, rnd_obj_0]
         else:
             aug_corpus = corpus.replace(aspect, object_text_1, 3)
-            aug_label = [1, label_number]
-        # data_list.append([aug_corpus, aug_label])
+            aug_label = [rnd_obj_0, label_number]
+        data_list.append([aug_corpus, aug_label])
 
         # single case - 일치 데이터 생성
         if rnd_5[idx]:
@@ -157,16 +160,16 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         # pair case - 부분 중립 데이터 생성
         if rnd_7[idx] % 4 == 0:
             aug_corpus = corpus.replace(aspect, object_text_0, 3) + " " + corpus_1
-            aug_label = [label_number, 1]
+            aug_label = [label_number, rnd_obj_1]
         elif rnd_7[idx] % 4 == 1:
             aug_corpus = corpus + " " + corpus_1.replace(aspect_1, object_text_0, 3)
-            aug_label = [label_number_1, 1]
+            aug_label = [label_number_1, rnd_obj_1]
         elif rnd_7[idx] % 4 == 2:
             aug_corpus = corpus.replace(aspect, object_text_1, 3) + " " + corpus_1
-            aug_label = [1, label_number]
+            aug_label = [rnd_obj_1, label_number]
         else:
             aug_corpus = corpus + " " + corpus_1.replace(aspect_1, object_text_1, 3)
-            aug_label = [1, label_number_1]
+            aug_label = [rnd_obj_1, label_number_1]
         # data_list.append([aug_corpus, aug_label])
 
         # pair case - 대립 데이터 생성
@@ -187,7 +190,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         pos_corpus, pos_aspect, _ = pos_dataset[rnd_8[idx]]
         neg_corpus, neg_aspect, _ = neg_dataset[rnd_9[idx]]
 
-        pos_label_number = 2
+        pos_label_number = 1
         neg_label_number = 0
 
         # counter pair case - 대립 데이터 생성
@@ -236,14 +239,14 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         else:
             null_corpus = neg_corpus
             target_corpus = pos_corpus.replace(pos_aspect, aug_text)
-            target_label = 2
+            target_label = 1
         
         # random case 3. 중립 문장의 왼쪽/오른쪽 결합 선택
         if rnd_10[idx, 2]:
             aug_corpus = null_corpus + " " + target_corpus
         else:
             aug_corpus = target_corpus + " " + null_corpus
-        aug_label = [1, 1]
+        aug_label = [rnd_obj_2, rnd_obj_2]
         aug_label[aug_label_idx] = target_label
 
         # data_list.append([aug_corpus, aug_label])
@@ -275,11 +278,11 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         if rnd_case_0[idx]:
             neg_text = object_text_0
             pos_text = object_text_1
-            aug_label = [0, 2]
+            aug_label = [0, 1]
         else:
             neg_text = object_text_1
             pos_text = object_text_0
-            aug_label = [2, 0]
+            aug_label = [1, 0]
 
         pos_corpus, pos_aspect, _ = short_pos_dataset[rnd_pos[idx]]
         neg_corpus, neg_aspect, _ = short_neg_dataset[rnd_neg[idx]]
