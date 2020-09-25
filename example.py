@@ -118,6 +118,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
 
     rnd_obj_0 = np.random.randint(0, 2, len(dataset))
     rnd_obj_1 = np.random.randint(0, 2, len(dataset))
+    rnd_obj_2 = np.random.randint(0, 2, len(dataset))
 
     # split by list
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
