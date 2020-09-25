@@ -121,7 +121,7 @@ class DPSA(torch.nn.Module):
         if dr_rate_1:
             self.dropout_1 = torch.nn.Dropout(p=dr_rate_1)
 
-    def forward(self, x, segment_ids, attention_mask, sa=True, absa=False):
+    def forward(self, x, segment_ids, attention_mask):
         # bert forward
         pooler, word_vectors, result_0, result_1 = self.simple_dp(x, segment_ids, attention_mask)
 
@@ -356,8 +356,8 @@ def ex_pre_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
     device = torch.device(ctx)
 
     simple_dp_model = SimpleDP(bert_model).to(device)
-    # simple_dp_model.load_state_dict(torch.load(dp_model_path, map_location=self.device))
-    model = DPSA(simple_dp_model).to(device)
+    simple_dp_model.load_state_dict(torch.load(dp_model_path, map_location=self.device))
+    model = DPSA(simple_dp_model, dr_rate_0=0.2, dr_rate_1=0.2).to(device)
 
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
@@ -395,7 +395,7 @@ def ex_pre_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
             x = word_embedding(token_ids)
 
             # forward propagation
-            out = model(x, segment_ids, attention_mask, sa=True, absa=True)
+            out = model(x, segment_ids, attention_mask)
 
             # backward propagation
             loss = lf(out, label)
@@ -429,7 +429,7 @@ def ex_pre_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
                 x = word_embedding(token_ids)
 
                 # forward propagation
-                out = model(x, segment_ids, attention_mask, sa=True, absa=True)
+                out = model(x, segment_ids, attention_mask)
 
                 # test accuracy
                 test_accuracy += masa.model.calculate_accuracy(out, label)

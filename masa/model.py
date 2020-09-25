@@ -11,7 +11,7 @@ import logging
 
 DEFAULT_OPTION = {
     "batch_size": 64,
-    "num_epochs": 10,
+    "num_epochs": 20,
 
     # Pre-Processing
     "max_len": 64,
