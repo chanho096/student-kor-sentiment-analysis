@@ -199,7 +199,7 @@ def _model_validation_for_base(opt, base_model, device, tokenizer):
                 result_0 = np.argmax(result_0, axis=1) - 1
 
                 sub_count += result_0.shape[0]
-                sub_hit_count += np.count_nonzero(result_0[result_0 == label])
+                sub_hit_count += np.count_nonzero(result_0[result_0 == label.numpy()])
 
         # 결과 저장
         result.append([sub_hit_count, sub_count])
@@ -633,10 +633,11 @@ def ex_base_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
     # ----------------------------------------------------------
     for e in range(opt["num_epochs"]):
         train_accuracy = 0.0
+        test_accuracy = 0.0
 
         # Train Batch
         model.train()
-        for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(batch_loader):
+        for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(train_batch_loader):
             optimizer.zero_grad()
 
             # set train batch
