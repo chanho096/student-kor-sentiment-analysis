@@ -114,7 +114,7 @@ def _model_validation(ABSA_model):
     return result_0, result_1, result_2
 
 
-def _model_validation_for_base(opt, base_model, device, tokenizer):
+def _model_validation_for_base(opt, base_model, device, tokenizer, with_mask=False):
     """
         validation set 을 이용하여 모델 정확도 계산
     """
@@ -153,7 +153,7 @@ def _model_validation_for_base(opt, base_model, device, tokenizer):
                 if inf[idx][asp_idx] == 0:
                     continue
 
-                # find aspect wor
+                # find aspect word
                 word_list = EX_SIM_WORD_LIST[asp_idx]
                 aspect_word = None
                 for word in word_list:
@@ -161,6 +161,10 @@ def _model_validation_for_base(opt, base_model, device, tokenizer):
                         aspect_word = word
                 if aspect_word is None:
                     continue
+
+                if with_mask:
+                    corpus = corpus.replace(aspect_word, opt["object_text_0"])
+                    aspect_word = opt["object_text_0"]
 
                 added_cl.append((corpus, aspect_word))
                 result_info.append((asp_idx, inf[idx][asp_idx]))
@@ -585,7 +589,7 @@ def ex_pre_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
         torch.save(model.state_dict(), f"pre_trained_model_{e+1}.pt")
 
 
-def ex_base_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
+def ex_base_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", with_mask=False):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
     ABSA_model.load_model(model_path=ABSA_model_path)
@@ -605,6 +609,9 @@ def ex_base_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
 
         sentence_info = []
         for (corpus, aspect, label) in list(dataset):
+            if with_mask:
+                corpus = corpus.replace(aspect, opt["object_text_0"])
+                aspect = opt["object_text_0"]
             sentence = transform((corpus, aspect))
 
             # set label array
@@ -749,4 +756,4 @@ def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
-    ex_base_model_training()
+    ex_base_model_training(with_mask=True)
