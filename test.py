@@ -118,6 +118,7 @@ class DPSA(torch.nn.Module):
 
         self.classifier_0 = torch.nn.Linear(32, 1)
         self.classifier_1 = torch.nn.Linear(num_hiddens*2 + DP_LABEL_SYNTAX_LENGTH + DP_LABEL_FUNCTION_LENGTH, 2)
+        self.classifier_tmp = torch.nn.Linear(768, 2)
 
         if dr_rate_0:
             self.dropout_0 = torch.nn.Dropout(p=dr_rate_0)
@@ -140,7 +141,7 @@ class DPSA(torch.nn.Module):
         dp_out = torch.tanh(dp_out)
         """
         out_0 = self.dropout_1(pooler) if self.dr_rate_1 else pooler
-        out_0 = torch.nn.Linear(self.num_hiddens, 2)(out_0)
+        out_0 = self.classifier_tmp(out_0)
         out_0 = torch.nn.functional.softmax(out_0, dim=1)
 
         return out_0
@@ -376,7 +377,8 @@ def ex_pre_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
          'weight_decay': 0.01},
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
-    optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning_rate"])
+    optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning"
+                                                                        "_rate"])
     lf = torch.nn.CrossEntropyLoss()
 
     t_total = len(train_batch_loader) * opt["num_epochs"]
