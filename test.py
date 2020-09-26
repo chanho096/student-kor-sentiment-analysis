@@ -129,6 +129,7 @@ class DPSA(torch.nn.Module):
         pooler, word_vectors, (result_0, hidden_0), (result_1, hidden_1) = \
             self.simple_dp(x, segment_ids, attention_mask)
 
+        """
         result_stack_0 = torch.stack(result_0, dim=2)
         result_stack_1 = torch.stack(result_1, dim=2)
         dp_result = torch.cat((word_vectors, result_stack_0, result_stack_1), dim=1)
@@ -137,6 +138,12 @@ class DPSA(torch.nn.Module):
         dp_out = self.classifier_0(dp_out)  # pooled dp_output
         dp_out = torch.squeeze(dp_out, dim=2)
         dp_out = torch.tanh(dp_out)
+        """
+        out_0 = self.dropout_1(pooler) if self.dr_rate_1 else pooler
+        out_0 = torch.nn.Linear(self.num_hiddens, 2)(out_0)
+        out_0 = torch.nn.functional.softmax(out_0, dim=1)
+
+        return out_0
 
         classifier_input = torch.cat((pooler, dp_out), dim=1)
         out = self.dropout_1(classifier_input) if self.dr_rate_1 else classifier_input
