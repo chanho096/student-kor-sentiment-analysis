@@ -52,18 +52,20 @@ class MultipleSoftmax(torch.nn.Module):
 
     def forward(self, input_tensor):
         """
-            x: input tensor - shape (batch_size, num_hidden, num_layers)
+              x: input tensor - shape (batch_size, num_hidden, num_layers)
         """
         result = []
+        hidden = []
         for idx, classifier in enumerate(self.classifiers):
             x = input_tensor[:, :, idx]
             out = self.dropouts[idx](x) if self.dr_rate else x
             out = classifier(out)
-            out = torch.nn.functional.softmax(out, dim=1)
+            hidden.append(out)
 
+            out = torch.nn.functional.softmax(out, dim=1)
             result.append(out)
 
-        return result
+        return result, hidden
 
 
 class SimpleDP(torch.nn.Module):
@@ -94,12 +96,12 @@ class SimpleDP(torch.nn.Module):
         out = torch.transpose(encoder_out, 1, 2)
         out = self.dropout_0(out) if self.dr_rate_0 else out
         word_vectors = self.word_classifier(out)
-        word_vectors = torch.nn.functional.tanh(word_vectors)
+        word_vectors = torch.tanh(word_vectors)
 
-        result_0 = self.multiple_softmax_0(word_vectors)
-        result_1 = self.multiple_softmax_1(word_vectors)
+        result_0, hidden_0 = self.multiple_softmax_0(word_vectors)
+        result_1, hidden_1 = self.multiple_softmax_1(word_vectors)
 
-        return pooler, word_vectors, result_0, result_1
+        return pooler, word_vectors, (result_0, hidden_0), (result_1, hidden_1)
 
 
 class DPSA(torch.nn.Module):
@@ -114,29 +116,31 @@ class DPSA(torch.nn.Module):
         self.dr_rate_0 = dr_rate_0
         self.dr_rate_1 = dr_rate_1
 
-        self.lstm = torch.nn.LSTM(input_size=num_hiddens + DP_LABEL_SYNTAX_LENGTH + DP_LABEL_FUNCTION_LENGTH,
-                                  hidden_size=num_hiddens, dropout=dr_rate_0 if dr_rate_0 else 0)
-        self.classifier = torch.nn.Linear(num_hiddens*2, 2)
+        self.classifier_0 = torch.nn.Linear(32, 1)
+        self.classifier_1 = torch.nn.Linear(num_hiddens*2 + DP_LABEL_SYNTAX_LENGTH + DP_LABEL_FUNCTION_LENGTH, 2)
 
+        if dr_rate_0:
+            self.dropout_0 = torch.nn.Dropout(p=dr_rate_0)
         if dr_rate_1:
             self.dropout_1 = torch.nn.Dropout(p=dr_rate_1)
 
     def forward(self, x, segment_ids, attention_mask):
         # bert forward
-        pooler, word_vectors, result_0, result_1 = self.simple_dp(x, segment_ids, attention_mask)
+        pooler, word_vectors, (result_0, hidden_0), (result_1, hidden_1) = \
+            self.simple_dp(x, segment_ids, attention_mask)
 
         result_stack_0 = torch.stack(result_0, dim=2)
         result_stack_1 = torch.stack(result_1, dim=2)
-        lstm_input = torch.cat((word_vectors, result_stack_0, result_stack_1), dim=1)
-        lstm_input = torch.transpose(lstm_input, 1, 2)
-        lstm_input = torch.transpose(lstm_input, 0, 1)  # (seq_len, batch, input_size)
+        dp_result = torch.cat((word_vectors, result_stack_0, result_stack_1), dim=1)
 
-        lstm_output, _ = self.lstm(lstm_input)
-        last_lstm_output = lstm_output[-1, :, :]
+        dp_out = self.dropout_0(dp_result) if self.dr_rate_0 else dp_result
+        dp_out = self.classifier_0(dp_out)  # pooled dp_output
+        dp_out = torch.squeeze(dp_out, dim=2)
+        dp_out = torch.tanh(dp_out)
 
-        classifier_input = torch.cat((pooler, last_lstm_output), dim=1)
+        classifier_input = torch.cat((pooler, dp_out), dim=1)
         out = self.dropout_1(classifier_input) if self.dr_rate_1 else classifier_input
-        out = self.classifier(out)
+        out = self.classifier_1(out)
         out = torch.nn.functional.softmax(out, dim=1)
 
         return out
@@ -241,7 +245,7 @@ def ex_dp_training(ctx="cuda:0", opt=masa.model.DEFAULT_OPTION):
             x = word_embedding(token_ids)
 
             # forward propagation
-            _, word_vector, result_0, result_1 = model(x, segment_ids, attention_mask)
+            _, word_vector, (result_0, _), (result_1, _) = model(x, segment_ids, attention_mask)
 
             # backward propagation
             loss = lf(result_0[0], label_0[:, 0])
@@ -287,7 +291,7 @@ def ex_dp_training(ctx="cuda:0", opt=masa.model.DEFAULT_OPTION):
                 x = word_embedding(token_ids)
 
                 # forward propagation
-                _, word_vector, result_0, result_1 = model(x, segment_ids, attention_mask)
+                _, word_vector, (result_0, _), (result_1, _) = model(x, segment_ids, attention_mask)
 
                 # backward propagation
                 loss = lf(result_0[0], label_0[:, 0])
@@ -356,7 +360,7 @@ def ex_pre_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
     device = torch.device(ctx)
 
     simple_dp_model = SimpleDP(bert_model).to(device)
-    simple_dp_model.load_state_dict(torch.load(dp_model_path, map_location=self.device))
+    simple_dp_model.load_state_dict(torch.load(dp_model_path, map_location=device))
     model = DPSA(simple_dp_model, dr_rate_0=0.2, dr_rate_1=0.2).to(device)
 
     no_decay = ['bias', 'LayerNorm.weight']
@@ -425,7 +429,7 @@ def ex_pre_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
 
                 # get word embedding
                 attention_mask = masa.model.gen_attention_mask(token_ids, valid_length)
-                word_embedding = model.bert.get_input_embeddings()
+                word_embedding = simple_dp_model.bert.get_input_embeddings()
                 x = word_embedding(token_ids)
 
                 # forward propagation
