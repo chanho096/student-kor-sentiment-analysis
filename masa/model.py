@@ -14,7 +14,8 @@ DEFAULT_OPTION = {
     "num_epochs": 20,
 
     # Pre-Processing
-    "max_len": 64,
+    "bert_max_len": 64,
+    "bert_hidden_size": 768,
 
     # Training
     "learning_rate": 5e-5,
@@ -53,14 +54,12 @@ class ABSAClassifier(torch.nn.Module):
     def __init__(self,
                  bert,
                  sa_classifier=None,
-                 hidden_size=768,
-                 num_classes=3,
+                 hidden_size=768,  # bert hidden size
                  dr_rate_0=None,
                  dr_rate_1=None,
                  ):
         super(ABSAClassifier, self).__init__()
         self.bert = bert
-        self.num_classes = num_classes
         self.dr_rate_0 = dr_rate_0
         self.dr_rate_1 = dr_rate_1
 
@@ -68,8 +67,8 @@ class ABSAClassifier(torch.nn.Module):
             self.classifier_0 = sa_classifier
         else:
             self.classifier_0 = torch.nn.Linear(hidden_size, 2)
-        self.classifier_1 = torch.nn.Linear(hidden_size, num_classes)
-        self.classifier_2 = torch.nn.Linear(hidden_size, num_classes)
+        self.classifier_1 = torch.nn.Linear(hidden_size, 3)  # mask 1
+        self.classifier_2 = torch.nn.Linear(hidden_size, 3)  # mask 2
 
         if dr_rate_0:
             self.dropout_0 = torch.nn.Dropout(p=dr_rate_0)
@@ -135,14 +134,16 @@ class ABSAModel:
         ABSA Model 을 파일로부터 불러올 수 있다.
 
     """
-    def __init__(self, ctx="cuda:0"):
+    def __init__(self, ctx="cuda:0", opt=None):
         self._state = False
 
         # ABSA model
         self.model = None
         self.device = torch.device(ctx)
-        self.opt = DEFAULT_OPTION.copy()
-        self.opt["batch_size"] = 16
+        if not opt:
+            opt = DEFAULT_OPTION.copy()
+            opt["batch_size"] = 16
+        self.opt = opt
 
         # KO-BERT model
         self.bert_model = None
@@ -174,7 +175,7 @@ class ABSAModel:
         """
         pass
 
-    def load_model(self, model_path):
+    def load_model(self, model_path, dr_rate_0=None, dr_rate_1=None):
         """
             load pre-trained ABSA model
             
@@ -190,7 +191,8 @@ class ABSAModel:
             return False
 
         # create classifier
-        model = ABSAClassifier(self.bert_model).to(self.device)
+        model = ABSAClassifier(self.bert_model, hidden_size=self.opt["bert_hidden_size"],
+                               dr_rate_0=dr_rate_0, dr_rate_1=dr_rate_1).to(self.device)
 
         # load model parameter
         if model_path is not None:
@@ -212,7 +214,7 @@ class ABSAModel:
             return None
 
         transform = nlp.data.BERTSentenceTransform(
-            self.bert_tokenizer, max_seq_length=self.opt["max_len"], pad=True, pair=False)
+            self.bert_tokenizer, max_seq_length=self.opt["bert_max_len"], pad=True, pair=False)
 
         sentence_info = []
         for corpus in corpus_list:

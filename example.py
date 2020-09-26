@@ -116,24 +116,20 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
     rnd_9 = np.random.randint(0, len(neg_dataset), num_counter_case)
     rnd_10 = np.random.uniform(0, 1, (num_counter_case, 3)) > 0.5
 
-    rnd_obj_0 = np.random.randint(0, 2, len(dataset))
-    rnd_obj_1 = np.random.randint(0, 2, len(dataset))
-    rnd_obj_2 = np.random.randint(0, 2, num_counter_case)
-
     # split by list
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
         # Augmented Data - single
         # single case - 중립 데이터 생성
         # data_list.append([corpus, [1, 1]])
         
-        # single case - 부분 중립 데이터 생성
-        label_number = 1 if label == "positive" else 0
+        # single case - 대립 데이터 생성
+        label_number = 2 if label == "positive" else 0
         if rnd_0[idx]:
             aug_corpus = corpus.replace(aspect, object_text_0, 3)
-            aug_label = [label_number, rnd_obj_0[idx]]
+            aug_label = [label_number, 1]
         else:
             aug_corpus = corpus.replace(aspect, object_text_1, 3)
-            aug_label = [rnd_obj_0[idx], label_number]
+            aug_label = [1, label_number]
         data_list.append([aug_corpus, aug_label])
 
         # single case - 일치 데이터 생성
@@ -153,7 +149,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         # Augmented Data - pair
         rnd_1[idx] = len(dataset) - 1 if rnd_1[idx] == idx else rnd_1[idx]
         corpus_1, aspect_1, label_1 = dataset[rnd_1[idx]]
-        label_number_1 = 1 if label_1 == "positive" else 0
+        label_number_1 = 2 if label_1 == "positive" else 0
 
         # pair case - 완전 중립 데이터 생성
         # data_list.append([corpus + " " + corpus_1, [1, 1]])
@@ -161,16 +157,16 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         # pair case - 부분 중립 데이터 생성
         if rnd_7[idx] % 4 == 0:
             aug_corpus = corpus.replace(aspect, object_text_0, 3) + " " + corpus_1
-            aug_label = [label_number, rnd_obj_1[idx]]
+            aug_label = [label_number, 1]
         elif rnd_7[idx] % 4 == 1:
             aug_corpus = corpus + " " + corpus_1.replace(aspect_1, object_text_0, 3)
-            aug_label = [label_number_1, rnd_obj_1[idx]]
+            aug_label = [label_number_1, 1]
         elif rnd_7[idx] % 4 == 2:
             aug_corpus = corpus.replace(aspect, object_text_1, 3) + " " + corpus_1
-            aug_label = [rnd_obj_1[idx], label_number]
+            aug_label = [1, label_number]
         else:
             aug_corpus = corpus + " " + corpus_1.replace(aspect_1, object_text_1, 3)
-            aug_label = [rnd_obj_1[idx], label_number_1]
+            aug_label = [1, label_number_1]
         # data_list.append([aug_corpus, aug_label])
 
         # pair case - 대립 데이터 생성
@@ -191,7 +187,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         pos_corpus, pos_aspect, _ = pos_dataset[rnd_8[idx]]
         neg_corpus, neg_aspect, _ = neg_dataset[rnd_9[idx]]
 
-        pos_label_number = 1
+        pos_label_number = 2
         neg_label_number = 0
 
         # counter pair case - 대립 데이터 생성
@@ -240,14 +236,14 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         else:
             null_corpus = neg_corpus
             target_corpus = pos_corpus.replace(pos_aspect, aug_text)
-            target_label = 1
+            target_label = 2
         
         # random case 3. 중립 문장의 왼쪽/오른쪽 결합 선택
         if rnd_10[idx, 2]:
             aug_corpus = null_corpus + " " + target_corpus
         else:
             aug_corpus = target_corpus + " " + null_corpus
-        aug_label = [rnd_obj_2[idx], rnd_obj_2[idx]]
+        aug_label = [1, 1]
         aug_label[aug_label_idx] = target_label
 
         # data_list.append([aug_corpus, aug_label])
@@ -279,11 +275,11 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
         if rnd_case_0[idx]:
             neg_text = object_text_0
             pos_text = object_text_1
-            aug_label = [0, 1]
+            aug_label = [0, 2]
         else:
             neg_text = object_text_1
             pos_text = object_text_0
-            aug_label = [1, 0]
+            aug_label = [2, 0]
 
         pos_corpus, pos_aspect, _ = short_pos_dataset[rnd_pos[idx]]
         neg_corpus, neg_aspect, _ = short_neg_dataset[rnd_neg[idx]]
@@ -338,9 +334,9 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
 
 
 def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
-    ABSA_model = ABSAModel(ctx=ctx)
+    ABSA_model = ABSAModel(ctx=ctx, opt=opt)
     ABSA_model.load_kobert()
-    ABSA_model.load_model(model_path=None)
+    ABSA_model.load_model(model_path=None, dr_rate_0=opt["drop_out_rate"])
 
     # ---------------------- Data Loader -----------------------
     # ----------------------------------------------------------
@@ -357,7 +353,7 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             corpus_list.append(corpus)
 
             # set label array
-            label_array = np.array([label, label, label], dtype=np.int32)
+            label_array = np.array(label, dtype=np.int32)
 
             # set label list
             label_list.append(label_array)
@@ -366,7 +362,8 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
         for idx, tuple_item in enumerate(sentence_info):
             sentence_info[idx] = tuple_item + (label_list[idx],)
 
-        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"], num_workers=0)
+        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
+                                                   num_workers=0, shuffle=True)
         batch_loaders.append(batch_loader)
 
     train_batch_loader, test_batch_loader = batch_loaders
@@ -412,17 +409,17 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             x = word_embedding(token_ids)
 
             # forward propagation
-            out_0, out_1, out_2 = model(x, segment_ids, attention_mask, sa=True, absa=True)
+            out_0, _, _ = model(x, segment_ids, attention_mask, sa=True, absa=False)
 
             # backward propagation
-            loss = lf(out_0, label[:, 0]) + lf(out_1, label[:, 1]) + lf(out_2, label[:, 2])
+            loss = lf(out_0, label)
             loss.backward()
 
             # optimization
             torch.nn.utils.clip_grad_norm_(model.parameters(), opt["max_grad_norm"])
             optimizer.step()
             scheduler.step()  # Update learning rate schedule
-            train_accuracy += md.calculate_accuracy(out_0, label[:, 0])
+            train_accuracy += md.calculate_accuracy(out_0, label)
 
             if batch_id % opt["log_interval"] == 0:
                 print("epoch {} batch id {} loss {} train accuracy {}".format(e + 1, batch_id + 1,
@@ -446,10 +443,10 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
                 x = word_embedding(token_ids)
 
                 # forward propagation
-                out_0, out_1, out_2 = model(x, segment_ids, attention_mask, sa=True, absa=True)
+                out_0, _, _ = model(x, segment_ids, attention_mask, sa=True, absa=False)
 
                 # test accuracy
-                test_accuracy += md.calculate_accuracy(out_0, label[:, 0])
+                test_accuracy += md.calculate_accuracy(out_0, label)
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
         torch.save(model.state_dict(), f"pre_trained_model_{e+1}.pt")
@@ -459,6 +456,12 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
     ABSA_model.load_model(model_path=ABSA_model_path)
+
+    # Validation
+    r1, r2, r3 = _model_validation(ABSA_model)
+    print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
+          f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
+          f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
 
     # load dataset
     total_dataset = nlp.data.TSVDataset("sentiment_dataset.csv", field_indices=[0, 1, 3], num_discard_samples=1)
@@ -598,4 +601,4 @@ def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
-    ex_model_training()
+    ex_pre_training()
