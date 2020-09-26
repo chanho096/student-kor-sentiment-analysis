@@ -9,19 +9,19 @@ corpus_data_dir_name = "corpus"
 #  https://github.com/e9t/nsmc
 train_data_url = "https://github.com/e9t/nsmc/raw/master/ratings_train.txt"
 test_data_url = "https://github.com/e9t/nsmc/raw/master/ratings_test.txt"
-train_data_name = "ratings_train.txt"
-test_data_name = "ratings_test.txt"
+movie_train_data_name = "ratings_train.txt"
+movie_test_data_name = "ratings_test.txt"
 
 
-def download_movie_corpus_data():
+def get_movie_corpus_data_path():
     current_dir = os.getcwd()
     corpus_data_dir = os.path.join(current_dir, corpus_data_dir_name)
 
     if not os.path.isdir(corpus_data_dir):
         os.makedirs(corpus_data_dir)
 
-    train_data_path = os.path.join(corpus_data_dir, train_data_name)
-    test_data_path = os.path.join(corpus_data_dir, test_data_name)
+    train_data_path = os.path.join(corpus_data_dir, movie_train_data_name)
+    test_data_path = os.path.join(corpus_data_dir, movie_test_data_name)
 
     # download train/test corpus data
     if not os.path.isfile(train_data_path):
@@ -31,6 +31,27 @@ def download_movie_corpus_data():
     if not os.path.isfile(test_data_path):
         print(f"Download URL: {test_data_url}")
         urlretrieve(test_data_url, test_data_path)
+
+    return train_data_path, test_data_path
+# ---------------------------------------------
+
+
+# 한국 경영 학회 - 감성분석을 위한 온라인 상품평 데이터
+# http://www.drbr.or.kr/datasets/view/?seq=20
+# ABSA 연구 목적 데이터
+ABSA_train_data_name = "sentiment_analysis_train.csv"
+ABSA_test_data_name = "sentiment_analysis_test.csv"
+
+
+def get_aspect_based_corpus_data_path():
+    current_dir = os.getcwd()
+    corpus_data_dir = os.path.join(current_dir, corpus_data_dir_name)
+
+    train_data_path = os.path.join(corpus_data_dir, ABSA_train_data_name)
+    test_data_path = os.path.join(corpus_data_dir, ABSA_test_data_name)
+
+    assert(os.path.isfile(train_data_path))
+    assert(os.path.isfile(test_data_path))
 
     return train_data_path, test_data_path
 # ---------------------------------------------

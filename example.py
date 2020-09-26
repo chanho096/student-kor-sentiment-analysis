@@ -1,6 +1,6 @@
 import loader
 from masa.model import ABSAModel
-import masa.model as md
+import masa.model
 
 import gluonnlp as nlp
 import torch
@@ -19,6 +19,50 @@ EX_SIM_WORD_LIST = [["연기", "연극"],
                     ["반전", "역전", "전환"],
                     ["음악", "노래", "사운드", "음향"],
                     ["규모", "스케일", "크기"]]
+
+
+class BaseModel(torch.nn.Module):
+    def __init__(self,
+                 bert,
+                 hidden_size=768,  # bert hidden size
+                 dr_rate_0=None
+                 ):
+        super(BaseModel, self).__init__()
+        self.bert = bert
+        self.dr_rate_0 = dr_rate_0
+
+        self.classifier_0 = torch.nn.Linear(hidden_size, 3)
+
+        if dr_rate_0:
+            self.dropout_0 = torch.nn.Dropout(p=dr_rate_0)
+
+    def forward(self, x, segment_ids, attention_mask):
+        # bert forward
+        _, pooler = self.bert(inputs_embeds=x, token_type_ids=segment_ids.long(),
+                              attention_mask=attention_mask)
+
+        out_0 = self.dropout_0(pooler) if self.dr_rate_0 else pooler
+        out_0 = self.classifier_0(out_0)
+        out_0 = torch.nn.functional.softmax(out_0, dim=1)
+
+        return out_0
+
+
+def _default_train_setup(opt, model, batch_loader):
+    no_decay = ['bias', 'LayerNorm.weight']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+         'weight_decay': 0.01},
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+    ]
+    optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning_rate"])
+    loss_function = torch.nn.CrossEntropyLoss()
+
+    t_total = len(batch_loader) * opt["num_epochs"]
+    warmup_steps = int(t_total * opt["warmup_ratio"])
+    scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
+
+    return loss_function, optimizer, scheduler,
 
 
 def _model_validation(ABSA_model):
@@ -70,7 +114,106 @@ def _model_validation(ABSA_model):
     return result_0, result_1, result_2
 
 
-def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
+def _model_validation_for_base(opt, base_model, device, tokenizer):
+    """
+        validation set 을 이용하여 모델 정확도 계산
+    """
+    corpus_list, asp_info = loader.load_validation_data()
+    transform = nlp.data.BERTSentenceTransform(
+        tokenizer, max_seq_length=opt["bert_max_len"], pad=True, pair=True)
+
+    # split counter example
+    counter_example = np.abs(asp_info.sum(axis=1)) != (np.abs(asp_info)).sum(axis=1)
+    pos_0 = np.where(counter_example)[0]
+    pos_1 = np.where(np.logical_not(counter_example))[0]
+
+    # split corpus list
+    corpus_list_0 = []
+    corpus_list_1 = []
+    for idx in range(0, pos_0.shape[0]):
+        corpus_list_0.append(corpus_list[pos_0[idx]])
+    for idx in range(0, pos_1.shape[0]):
+        corpus_list_1.append(corpus_list[pos_1[idx]])
+
+    # split aspect info
+    asp_info_0 = asp_info[pos_0, :]
+    asp_info_1 = asp_info[pos_1, :]
+
+    split_package = [[corpus_list_0, asp_info_0], [corpus_list_1, asp_info_1]]
+    result = []
+    total_count = 0
+    hit_count = 0
+    for (cl, inf) in split_package:
+        # validation input 재생성
+        added_cl = []
+        result_info = []
+
+        for idx, corpus in enumerate(cl):
+            for asp_idx in range(0, inf[idx].shape[0]):
+                if inf[idx][asp_idx] == 0:
+                    continue
+
+                # find aspect wor
+                word_list = EX_SIM_WORD_LIST[asp_idx]
+                aspect_word = None
+                for word in word_list:
+                    if corpus.find(word) != -1:
+                        aspect_word = word
+                if aspect_word is None:
+                    continue
+
+                added_cl.append((corpus, aspect_word))
+                result_info.append((asp_idx, inf[idx][asp_idx]))
+
+        # tokenizing
+        sentence_info = []
+        for idx, added_corpus in enumerate(added_cl):
+            sentence = transform(added_corpus)
+            sentence_info.append(sentence + result_info[idx])
+
+        # batch loader
+        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
+                                                   num_workers=0, shuffle=False)
+
+        # analyze
+        sub_count = 0
+        sub_hit_count = 0
+
+        with torch.no_grad():
+            for batch_id, (token_ids, valid_length, segment_ids, _, label) in enumerate(batch_loader):
+                # set test batch
+                token_ids = token_ids.long().to(device)
+                segment_ids = segment_ids.long().to(device)
+                valid_length = valid_length
+
+                # get word embedding
+                attention_mask = masa.model.gen_attention_mask(token_ids, valid_length)
+                word_embedding = base_model.bert.get_input_embeddings()
+                x = word_embedding(token_ids)
+
+                # forward propagation
+                out_0 = base_model(x, segment_ids, attention_mask)
+
+                # compare
+                result_0 = out_0.cpu().numpy()
+                result_0 = np.argmax(result_0, axis=1) - 1
+
+                sub_count += result_0.shape[0]
+                sub_hit_count += np.count_nonzero(result_0[result_0 == label])
+
+        # 결과 저장
+        result.append([sub_hit_count, sub_count])
+        total_count = total_count + sub_count
+        hit_count = hit_count + sub_hit_count
+
+    result_0 = hit_count / total_count  # 전체 적중률
+    result_1 = result[0][0] / result[0][1]  # 대립 사례 적중률
+    result_2 = result[1][0] / result[1][1]  # 일치 사례 적중률
+
+    return result_0, result_1, result_2
+
+
+def _load_with_augmentation(dataset, opt=masa.model.DEFAULT_OPTION):
     object_text_0 = opt["object_text_0"]
     object_text_1 = opt["object_text_1"]
 
@@ -333,7 +476,7 @@ def _load_with_augmentation(dataset, opt=md.DEFAULT_OPTION):
     return corpus_list, label_list
 
 
-def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
+def ex_pre_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model = ABSAModel(ctx=ctx, opt=opt)
     ABSA_model.load_kobert()
     ABSA_model.load_model(model_path=None, dr_rate_0=opt["drop_out_rate"])
@@ -341,7 +484,7 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     # ---------------------- Data Loader -----------------------
     # ----------------------------------------------------------
     # Naver sentiment movie corpus v1.0
-    data_path = loader.download_movie_corpus_data()
+    data_path = loader.get_movie_corpus_data_path()
 
     batch_loaders = []
     for path in data_path:
@@ -373,18 +516,8 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
     model = ABSA_model.model
     device = ABSA_model.device
 
-    no_decay = ['bias', 'LayerNorm.weight']
-    optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-         'weight_decay': 0.01},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-    ]
-    optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning_rate"])
-    lf = torch.nn.CrossEntropyLoss()
-
-    t_total = len(train_batch_loader) * opt["num_epochs"]
-    warmup_steps = int(t_total * opt["warmup_ratio"])
-    scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
+    # default setup
+    loss_function, optimizer, scheduler = _default_train_setup(opt, model, train_batch_loader)
 
     # -------------- ABSA CLASSIFIER MODEL TRAIN ---------------
     # ----------------------------------------------------------
@@ -404,7 +537,7 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             label = label.long().to(device)
 
             # get word embedding
-            attention_mask = md.gen_attention_mask(token_ids, valid_length)
+            attention_mask = masa.model.gen_attention_mask(token_ids, valid_length)
             word_embedding = model.bert.get_input_embeddings()
             x = word_embedding(token_ids)
 
@@ -412,14 +545,14 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             out_0, _, _ = model(x, segment_ids, attention_mask, sa=True, absa=False)
 
             # backward propagation
-            loss = lf(out_0, label)
+            loss = loss_function(out_0, label)
             loss.backward()
 
             # optimization
             torch.nn.utils.clip_grad_norm_(model.parameters(), opt["max_grad_norm"])
             optimizer.step()
             scheduler.step()  # Update learning rate schedule
-            train_accuracy += md.calculate_accuracy(out_0, label)
+            train_accuracy += masa.model.calculate_accuracy(out_0, label)
 
             if batch_id % opt["log_interval"] == 0:
                 print("epoch {} batch id {} loss {} train accuracy {}".format(e + 1, batch_id + 1,
@@ -438,7 +571,7 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
                 label = label.long().to(device)
 
                 # get word embedding
-                attention_mask = md.gen_attention_mask(token_ids, valid_length)
+                attention_mask = masa.model.gen_attention_mask(token_ids, valid_length)
                 word_embedding = model.bert.get_input_embeddings()
                 x = word_embedding(token_ids)
 
@@ -446,65 +579,60 @@ def ex_pre_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
                 out_0, _, _ = model(x, segment_ids, attention_mask, sa=True, absa=False)
 
                 # test accuracy
-                test_accuracy += md.calculate_accuracy(out_0, label)
+                test_accuracy += masa.model.calculate_accuracy(out_0, label)
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
         torch.save(model.state_dict(), f"pre_trained_model_{e+1}.pt")
 
 
-def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
+def ex_base_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
     ABSA_model.load_model(model_path=ABSA_model_path)
 
-    # Validation
-    r1, r2, r3 = _model_validation(ABSA_model)
-    print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
-          f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
-          f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
-
+    # ---------------------- LOAD DATASET ----------------------
+    # ----------------------------------------------------------
     # load dataset
-    total_dataset = nlp.data.TSVDataset("sentiment_dataset.csv", field_indices=[0, 1, 3], num_discard_samples=1)
+    data_path = loader.get_aspect_based_corpus_data_path()
+
+    # set batch loader
+    batch_loaders = []
+    transform = nlp.data.BERTSentenceTransform(
+        ABSA_model.bert_tokenizer, max_seq_length=opt["bert_max_len"], pad=True, pair=True)
+
+    for path in data_path:
+        dataset = nlp.data.TSVDataset(path, field_indices=[0, 1, 2], num_discard_samples=1)
+
+        sentence_info = []
+        for (corpus, aspect, label) in list(dataset):
+            sentence = transform((corpus, aspect))
+
+            # set label array
+            label = 2 if label == 'positive' else 0
+            label_array = np.array(label, dtype=np.int32)
+
+            # get sentence information (model input)
+            sentence_info.append(sentence + (label_array, ))
+
+        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
+                                                   num_workers=0, shuffle=True)
+        batch_loaders.append(batch_loader)
+
+    train_batch_loader, test_batch_loader = batch_loaders
 
     # ----------------- ABSA CLASSIFIER MODEL ------------------
     # ----------------------------------------------------------
     # aspect-based sentiment analysis model
-    model = ABSA_model.model
     device = ABSA_model.device
+    model = BaseModel(ABSA_model.bert_model).to(device)
 
-    # optimization - AdamW
-    no_decay = ['bias', 'LayerNorm.weight']
-    optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-         'weight_decay': 0.01},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-    ]
-    optimizer = transformers.AdamW(optimizer_grouped_parameters, lr=opt["learning_rate"])
-
-    # loss function - Cross Entropy
-    loss_function = torch.nn.CrossEntropyLoss()
+    # default setup
+    loss_function, optimizer, scheduler = _default_train_setup(opt, model, train_batch_loader)
 
     # -------------- ABSA CLASSIFIER MODEL TRAIN ---------------
     # ----------------------------------------------------------
     for e in range(opt["num_epochs"]):
         train_accuracy = 0.0
-
-        # data augmentation
-        train_corpus_list, train_label_list = _load_with_augmentation(total_dataset, opt)
-
-        # create batch loader
-        sentence_info = ABSA_model.tokenize(train_corpus_list)
-
-        for idx, tuple_item in enumerate(sentence_info):
-            sentence_info[idx] = tuple_item + (train_label_list[idx],)
-        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
-                                                   num_workers=0, shuffle=True)
-        if e == 0:
-            # only first epoch
-            # warmup scheduler
-            t_total = len(batch_loader) * opt["num_epochs"]  # size of batch...
-            warmup_steps = int(t_total * opt["warmup_ratio"])
-            scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
 
         # Train Batch
         model.train()
@@ -518,25 +646,22 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
             label = label.long().to(device)
 
             # get word embedding
-            attention_mask = md.gen_attention_mask(token_ids, valid_length)
+            attention_mask = masa.model.gen_attention_mask(token_ids, valid_length)
             word_embedding = model.bert.get_input_embeddings()
             x = word_embedding(token_ids)
 
             # forward propagation
-            _, out_1, out_2 = model(x, segment_ids, attention_mask, sa=False, absa=True)
+            out_0 = model(x, segment_ids, attention_mask)
 
             # backward propagation
-            loss = loss_function(out_1, label[:, 0]) + loss_function(out_2, label[:, 1])
+            loss = loss_function(out_0, label)
             loss.backward()
 
             # optimization
             torch.nn.utils.clip_grad_norm_(model.parameters(), opt["max_grad_norm"])
             optimizer.step()
             scheduler.step()  # Update learning rate schedule
-
-            accuracy_0 = md.calculate_accuracy(out_1, label[:, 0])
-            accuracy_1 = md.calculate_accuracy(out_2, label[:, 1])
-            train_accuracy += ((accuracy_0 + accuracy_1) / 2)  # Average of correct count
+            train_accuracy += masa.model.calculate_accuracy(out_0, label)
 
             if batch_id % opt["log_interval"] == 0:
                 print("epoch {} batch id {} loss {} train accuracy {}".format(e + 1, batch_id + 1,
@@ -544,17 +669,39 @@ def ex_model_training(opt=md.DEFAULT_OPTION, ctx="cuda:0"):
                                                                               train_accuracy / (batch_id + 1)))
         print("epoch {} train accuracy {}".format(e + 1, train_accuracy / (batch_id + 1)))
 
+        # Test Batch
+        model.eval()
+        with torch.no_grad():
+            for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(test_batch_loader):
+                # set test batch
+                token_ids = token_ids.long().to(device)
+                segment_ids = segment_ids.long().to(device)
+                valid_length = valid_length
+                label = label.long().to(device)
+
+                # get word embedding
+                attention_mask = masa.model.gen_attention_mask(token_ids, valid_length)
+                word_embedding = model.bert.get_input_embeddings()
+                x = word_embedding(token_ids)
+
+                # forward propagation
+                out_0 = model(x, segment_ids, attention_mask)
+
+                # test accuracy
+                test_accuracy += masa.model.calculate_accuracy(out_0, label)
+            print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
+
         # Validation
-        r1, r2, r3 = _model_validation(ABSA_model)
-        print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
+        r1, r2, r3 = _model_validation_for_base(opt, model, device, ABSA_model.bert_tokenizer)
+        print(f"movie corpus test: total accuracy: {'%0.2f' % (r1 * 100)}%, "
               f"case_0 accuracy: {'%0.2f' % (r2 * 100)}%, "
               f"case_1 accuracy: {'%0.2f' % (r3 * 100)}%")
 
-        torch.save(model.state_dict(), f"trained_model_{e+1}.pt")
+        torch.save(model.state_dict(), f"pre_trained_model_{e + 1}.pt")
 
 
 def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
-    model = md.ABSAModel(ctx)
+    model = masa.model.ABSAModel(ctx)
     model.load_kobert()
     model.load_model(model_path)
 
@@ -601,4 +748,4 @@ def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
-    ex_pre_training()
+    ex_base_model_training()

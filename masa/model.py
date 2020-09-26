@@ -10,7 +10,7 @@ import os
 import logging
 
 DEFAULT_OPTION = {
-    "batch_size": 64,
+    "batch_size": 4,
     "num_epochs": 20,
 
     # Pre-Processing
