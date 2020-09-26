@@ -368,7 +368,7 @@ def ex_pre_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
     device = torch.device(ctx)
 
     simple_dp_model = SimpleDP(bert_model).to(device)
-    simple_dp_model.load_state_dict(torch.load(dp_model_path, map_location=device))
+    # simple_dp_model.load_state_dict(torch.load(dp_model_path, map_location=device))
     model = DPSA(simple_dp_model, dr_rate_0=0.2, dr_rate_1=0.2).to(device)
 
     no_decay = ['bias', 'LayerNorm.weight']
