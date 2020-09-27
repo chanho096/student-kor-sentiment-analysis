@@ -698,6 +698,149 @@ def _absa_data_augmentation(dataset, opt=masa.model.DEFAULT_OPTION):
     return corpus_list, label_list
 
 
+def _base_data_augmentation(dataset, opt=masa.model.DEFAULT_OPTION):
+    target_dataset = []
+    for data in dataset:
+        # 길이 64 초과의 문자열 데이터를 제거한다.
+        if len(data[0]) > 64:
+            continue
+
+        # 수정된 dataset 생성
+        target_dataset.append(data)
+
+    dataset = target_dataset
+
+    # --------------- DATA AUGMENTATION FOR ABSA ---------------
+    # ----------------------------------------------------------
+    # get dataset with data augmentation
+    data_list = []
+    pos_dataset = []
+    neg_dataset = []
+    for data in dataset:
+        if data[2] == 'positive':
+            pos_dataset.append(data)
+        else:
+            neg_dataset.append(data)
+
+    num_counter_case = len(dataset) * 2
+
+    # random value
+    rnd_0 = np.random.uniform(0, 1, len(dataset)) > 0.5
+    rnd_1 = np.random.randint(0, len(dataset) - 1, len(dataset))
+    rnd_2 = np.random.uniform(0, 1, len(dataset)) > 0.5
+    rnd_3 = np.random.uniform(0, 1, num_counter_case) > 0.5
+    rnd_4 = np.random.randint(0, 256, num_counter_case)
+    rnd_5 = np.random.uniform(0, 1, len(dataset)) > 0.5
+    rnd_6 = np.random.randint(0, 256, len(dataset))
+    rnd_7 = np.random.randint(0, 256, len(dataset)) > 0.5
+    rnd_8 = np.random.randint(0, len(pos_dataset), num_counter_case)
+    rnd_9 = np.random.randint(0, len(neg_dataset), num_counter_case)
+    rnd_10 = np.random.uniform(0, 1, (num_counter_case, 3)) > 0.5
+
+    # split by list
+    for idx, (corpus, aspect, label) in enumerate(list(dataset)):
+        # Augmented Data - single
+        # single case - 중립 데이터 생성
+        # data_list.append([corpus, [1, 1]])
+        data_list.append([corpus, aspect, label])
+
+        # Augmented Data - pair
+        rnd_1[idx] = len(dataset) - 1 if rnd_1[idx] == idx else rnd_1[idx]
+        corpus_1, _, _ = dataset[rnd_1[idx]]
+
+        # pair case - 대립 데이터 생성
+        aug_corpus = corpus + " " + corpus_1
+        data_list.append([aug_corpus, aspect, label])
+
+    # Augmented Data - counter pair
+    for idx in range(0, num_counter_case):
+        pos_corpus, pos_aspect, _ = pos_dataset[rnd_8[idx]]
+        neg_corpus, neg_aspect, _ = neg_dataset[rnd_9[idx]]
+
+        pos_label_number = 2
+        neg_label_number = 0
+
+        # counter pair case - 대립 데이터 생성
+        if rnd_4[idx] % 2 == 0:
+            left_corpus = pos_corpus
+            right_corpus = neg_corpus
+            aug_aspect = pos_aspect
+            aug_label = pos_label_number
+        elif rnd_4[idx] % 4 == 1:
+            left_corpus = pos_corpus
+            right_corpus = neg_corpus
+            aug_aspect = neg_aspect
+            aug_label = neg_label_number
+
+        elif rnd_4[idx] % 4 == 2:
+            left_corpus = neg_corpus
+            right_corpus = pos_corpus
+            aug_aspect = pos_aspect
+            aug_label = pos_label_number
+        else:
+            left_corpus = neg_corpus
+            right_corpus = pos_corpus
+            aug_aspect = neg_aspect
+            aug_label = neg_label_number
+
+        aug_corpus = left_corpus + " " + right_corpus
+        data_list.append([aug_corpus, aug_aspect, aug_label])
+
+    # Augmented Data - counter triple
+    short_pos_dataset = []
+    short_neg_dataset = []
+    short_dataset = []
+    for data in dataset:
+        # 짧은 문장 데이터만을 추출한다.
+        if len(data[0]) > 32:
+            continue
+
+        if data[2] == 'positive':
+            short_pos_dataset.append(data)
+        else:
+            short_neg_dataset.append(data)
+        short_dataset.append(data)
+
+    num_triple_counter_case = len(short_dataset) * 3
+    rnd_pos = np.random.randint(0, len(short_pos_dataset), num_triple_counter_case)
+    rnd_neg = np.random.randint(0, len(short_neg_dataset), num_triple_counter_case)
+    rnd_null = np.random.randint(0, len(short_dataset), num_triple_counter_case)
+    rnd_case_0 = np.random.uniform(0, 1, num_triple_counter_case) > 0.5
+    rnd_case_2 = np.random.randint(0, 768, num_triple_counter_case)
+
+    for idx in range(0, num_triple_counter_case):
+        pos_corpus, pos_aspect, _ = short_pos_dataset[rnd_pos[idx]]
+        neg_corpus, neg_aspect, _ = short_neg_dataset[rnd_neg[idx]]
+        null_corpus, _, _ = short_dataset[rnd_null[idx]]
+
+        if rnd_case_0[idx]:
+            aug_label = 2
+            aug_aspect = pos_aspect
+        else:
+            aug_label = 0
+            aug_aspect = neg_aspect
+
+        if rnd_case_2[idx] % 6 == 0:
+            aug_corpus = pos_corpus + " " + null_corpus + " " + neg_corpus
+        elif rnd_case_2[idx] % 6 == 1:
+            aug_corpus = neg_corpus + " " + null_corpus + " " + pos_corpus
+        elif rnd_case_2[idx] % 6 == 2:
+            aug_corpus = null_corpus + " " + pos_corpus + " " + neg_corpus
+        elif rnd_case_2[idx] % 6 == 3:
+            aug_corpus = null_corpus + " " + neg_corpus + " " + pos_corpus
+        elif rnd_case_2[idx] % 6 == 4:
+            aug_corpus = pos_corpus + " " + neg_corpus + " " + null_corpus
+        else:
+            aug_corpus = neg_corpus + " " + pos_corpus + " " + null_corpus
+
+        data_list.append([aug_corpus, aug_aspect, aug_label])
+
+    # random shuffle
+    random.shuffle(data_list)
+
+    return data_list
+
+
 def ex_pre_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model = ABSAModel(ctx=ctx, opt=opt)
     ABSA_model.load_kobert()
@@ -807,10 +950,10 @@ def ex_pre_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
         torch.save(model.state_dict(), f"pre_trained_model_{e+1}.pt")
 
 
-def ex_base_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", with_mask=False):
+def ex_base_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", aug=False):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
-    ABSA_model.load_model(model_path=ABSA_model_path)
+    ABSA_model.load_model(model_path=None)
 
     # ---------------------- LOAD DATASET ----------------------
     # ----------------------------------------------------------
@@ -822,14 +965,14 @@ def ex_base_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", with_mas
     transform = nlp.data.BERTSentenceTransform(
         ABSA_model.bert_tokenizer, max_seq_length=opt["bert_max_len"], pad=True, pair=True)
 
-    for path in data_path:
+    for idx, path in enumerate(data_path):
         dataset = nlp.data.TSVDataset(path, field_indices=[0, 1, 2], num_discard_samples=1)
+
+        if idx == 0 and aug:
+            dataset = _base_data_augmentation(dataset)
 
         sentence_info = []
         for (corpus, aspect, label) in list(dataset):
-            if with_mask:
-                corpus = corpus.replace(aspect, opt["object_text_0"])
-                aspect = opt["object_text_0"]
             sentence = transform((corpus, aspect))
 
             # set label array
@@ -1069,4 +1212,4 @@ def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
-    ex_masa_model_training()
+    ex_base_model_training()
