@@ -951,16 +951,12 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
 
     # set test batch loader
     test_dataset = nlp.data.TSVDataset(test_data_path, field_indices=[0, 1, 2], num_discard_samples=1)
-    sentence_info = []
-    for (corpus, aspect, label) in list(test_dataset):
-        sentence = transform((corpus, aspect))
+    test_corpus_list = [test_corpus.replace(aspect, opt["object_text_0"], 3) for test_corpus, aspect, _ in test_dataset]
+    test_label_list = [gen.NUM_POS if test_label == 'positive' else gen.NUM_NEG for _, _, test_label in test_dataset]
 
-        # set label array
-        label = gen.NUM_POS if label == 'positive' else gen.NUM_NEG
-        label_array = np.array(label, dtype=np.int32)
-
-        # get sentence information (model input)
-        sentence_info.append(sentence + (label_array,))
+    sentence_info = ABSA_model.tokenize(test_corpus_list)
+    for idx, tuple_items in enumerate(sentence_info):
+        sentence_info[idx] = tuple_items + (np.array(test_label_list[idx], dtype=np.int32), )
 
     test_batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
                                                     num_workers=0, shuffle=True)
@@ -1050,9 +1046,7 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
                 _, out_1, out_2 = model(x, segment_ids, attention_mask)
 
                 # test accuracy
-                accuracy_0 = masa.model.calculate_accuracy(out_1, label[:, 0])
-                accuracy_1 = masa.model.calculate_accuracy(out_2, label[:, 1])
-                test_accuracy += ((accuracy_0 + accuracy_1) / 2)  # Average of correct count
+                test_accuracy += masa.model.calculate_accuracy(out_1, label)
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
         # Validation
