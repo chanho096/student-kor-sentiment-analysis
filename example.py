@@ -698,7 +698,7 @@ def _absa_data_augmentation(dataset, opt=masa.model.DEFAULT_OPTION):
     return corpus_list, label_list
 
 
-def _base_data_augmentation(dataset, opt=masa.model.DEFAULT_OPTION):
+def _base_data_augmentation(dataset):
     target_dataset = []
     for data in dataset:
         # 길이 64 초과의 문자열 데이터를 제거한다.
@@ -725,17 +725,10 @@ def _base_data_augmentation(dataset, opt=masa.model.DEFAULT_OPTION):
     num_counter_case = len(dataset) * 2
 
     # random value
-    rnd_0 = np.random.uniform(0, 1, len(dataset)) > 0.5
     rnd_1 = np.random.randint(0, len(dataset) - 1, len(dataset))
-    rnd_2 = np.random.uniform(0, 1, len(dataset)) > 0.5
-    rnd_3 = np.random.uniform(0, 1, num_counter_case) > 0.5
     rnd_4 = np.random.randint(0, 256, num_counter_case)
-    rnd_5 = np.random.uniform(0, 1, len(dataset)) > 0.5
-    rnd_6 = np.random.randint(0, 256, len(dataset))
-    rnd_7 = np.random.randint(0, 256, len(dataset)) > 0.5
     rnd_8 = np.random.randint(0, len(pos_dataset), num_counter_case)
     rnd_9 = np.random.randint(0, len(neg_dataset), num_counter_case)
-    rnd_10 = np.random.uniform(0, 1, (num_counter_case, 3)) > 0.5
 
     # split by list
     for idx, (corpus, aspect, label) in enumerate(list(dataset)):
@@ -983,7 +976,7 @@ def ex_base_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", aug=Fals
             sentence_info.append(sentence + (label_array, ))
 
         batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
-                                                   num_workers=0, shuffle=True)
+                                                   num_workers=0, shuffle=False)
         batch_loaders.append(batch_loader)
 
     train_batch_loader, test_batch_loader = batch_loaders
@@ -1069,14 +1062,14 @@ def ex_base_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", aug=Fals
         torch.save(model.state_dict(), f"pre_trained_model_{e + 1}.pt")
 
 
-def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
+def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", sa=False):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
-    ABSA_model.load_model(model_path=None)
+    ABSA_model.load_model(model_path=ABSA_model_path)
 
     # load dataset
     train_data_path, test_data_path = loader.get_aspect_based_corpus_data_path()
-    total_dataset = nlp.data.TSVDataset(train_data_path, field_indices=[0, 1, 2], num_discard_samples=1)
+    train_dataset = nlp.data.TSVDataset(train_data_path, field_indices=[0, 1, 2], num_discard_samples=1)
     test_dataset = nlp.data.TSVDataset(test_data_path, field_indices=[0, 1, 2], num_discard_samples=1)
 
     # set test batch loader
@@ -1086,7 +1079,7 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
         corpus_list.append(corpus.replace(aspect, opt["object_text_0"]))
 
         # set label array
-        label_array = np.array([2 if label == 'positive' else 0, 1], dtype=np.int32)
+        label_array = np.array([2 if label == 'positive' else 0], dtype=np.int32)
 
         # set label list
         label_list.append(label_array)
@@ -1096,7 +1089,31 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
         sentence_info[idx] = tuple_item + (label_list[idx],)
 
     test_batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
-                                                    num_workers=0, shuffle=True)
+                                                    num_workers=0, shuffle=False)
+
+    if sa:
+        sa_data_path, _ = loader.get_movie_corpus_data_path()
+        sa_dataset = nlp.data.TSVDataset(sa_data_path, field_indices=[1, 2], num_discard_samples=1)
+
+        corpus_list = []
+        label_list = []
+        for (corpus, label) in list(sa_dataset):
+            corpus_list.append(corpus)
+
+            # set label array
+            label_array = np.array(label, dtype=np.int32)
+
+            # set label list
+            label_list.append(label_array)
+
+        sentence_info = ABSA_model.tokenize(corpus_list)
+        for idx, tuple_item in enumerate(sentence_info):
+            sentence_info[idx] = tuple_item + (label_list[idx],)
+
+        sa_batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
+                                                      num_workers=0, shuffle=True)
+        sa_train_accuracy = 0
+        sa_batch_idx = 0
 
     # ----------------- ABSA CLASSIFIER MODEL ------------------
     # ----------------------------------------------------------
@@ -1120,27 +1137,30 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
     # ----------------------------------------------------------
     for e in range(opt["num_epochs"]):
         train_accuracy = 0.0
+        test_accuracy = 0.0
 
         # data augmentation
-        train_corpus_list, train_label_list = _absa_data_augmentation(total_dataset, opt)
+        train_corpus_list, train_label_list = _absa_data_augmentation(train_dataset, opt)
 
         # create batch loader
         sentence_info = ABSA_model.tokenize(train_corpus_list)
 
         for idx, tuple_item in enumerate(sentence_info):
             sentence_info[idx] = tuple_item + (train_label_list[idx],)
-        batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
-                                                   num_workers=0, shuffle=True)
+        train_batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
+                                                         num_workers=0, shuffle=False)
         if e == 0:
             # only first epoch
             # warmup scheduler
-            t_total = len(batch_loader) * opt["num_epochs"]  # size of batch...
+            t_total = len(train_batch_loader) * opt["num_epochs"]  # size of batch...
+            if sa:
+                t_total += len(sa_batch_loader) * opt["num_epochs"]
             warmup_steps = int(t_total * opt["warmup_ratio"])
             scheduler = transformers.optimization.get_linear_schedule_with_warmup(optimizer, warmup_steps, t_total)
 
         # Train Batch
         model.train()
-        for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(batch_loader):
+        for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(train_batch_loader):
             optimizer.zero_grad()
 
             # set train batch
@@ -1174,7 +1194,48 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
                 print("epoch {} batch id {} loss {} train accuracy {}".format(e + 1, batch_id + 1,
                                                                               loss.data.cpu().numpy(),
                                                                               train_accuracy / (batch_id + 1)))
+
+            if sa:
+                optimizer.zero_grad()
+
+                token_ids, valid_length, segment_ids, label = sa_batch_loader[sa_batch_idx]
+                sa_batch_idx = sa_batch_idx + 1
+                if sa_batch_idx == len(sa_batch_loader):
+                    sa_batch_idx = 0
+
+                # set train batch
+                token_ids = token_ids.long().to(device)
+                segment_ids = segment_ids.long().to(device)
+                valid_length = valid_length
+                label = label.long().to(device)
+
+                # get word embedding
+                attention_mask = masa.model.gen_attention_mask(token_ids, valid_length)
+                word_embedding = model.bert.get_input_embeddings()
+                x = word_embedding(token_ids)
+
+                # forward propagation
+                out_0, _, _ = model(x, segment_ids, attention_mask, sa=True, absa=False)
+
+                # backward propagation
+                loss = loss_function(out_0, label)
+                loss.backward()
+
+                # optimization
+                torch.nn.utils.clip_grad_norm_(model.parameters(), opt["max_grad_norm"])
+                optimizer.step()
+                scheduler.step()  # Update learning rate schedule
+
+                sa_train_accuracy += masa.model.calculate_accuracy(out_0, label)
+
+                if batch_id % opt["log_interval"] == 0:
+                    print("epoch {} batch id {} loss {} SA train accuracy {}".format(e + 1, batch_id + 1,
+                                                                                     loss.data.cpu().numpy(),
+                                                                                     sa_train_accuracy / (batch_id + 1)))
         print("epoch {} train accuracy {}".format(e + 1, train_accuracy / (batch_id + 1)))
+
+        if sa:
+            print("epoch {} SA train accuracy {}".format(e + 1, sa_train_accuracy / (batch_id + 1)))
 
         # Test Batch
         model.eval()
@@ -1195,7 +1256,7 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
                 _, out_1, out_2 = model(x, segment_ids, attention_mask, sa=False, absa=True)
 
                 # test accuracy
-                test_accuracy += masa.model.calculate_accuracy(out_0, label)
+                test_accuracy += masa.model.calculate_accuracy(out_1, label)
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
         # Validation
