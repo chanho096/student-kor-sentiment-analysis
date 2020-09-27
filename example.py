@@ -1075,7 +1075,28 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
     ABSA_model.load_model(model_path=None)
 
     # load dataset
-    total_dataset = nlp.data.TSVDataset("sentiment_dataset.csv", field_indices=[0, 1, 3], num_discard_samples=1)
+    train_data_path, test_data_path = loader.get_aspect_based_corpus_data_path()
+    total_dataset = nlp.data.TSVDataset(train_data_path, field_indices=[0, 1, 2], num_discard_samples=1)
+    test_dataset = nlp.data.TSVDataset(test_data_path, field_indices=[0, 1, 2], num_discard_samples=1)
+
+    # set test batch loader
+    corpus_list = []
+    label_list = []
+    for (corpus, aspect, label) in list(test_dataset):
+        corpus_list.append(corpus.replace(aspect, opt["object_text_0"]))
+
+        # set label array
+        label_array = np.array([2 if label == 'positive' else 0, 1], dtype=np.int32)
+
+        # set label list
+        label_list.append(label_array)
+
+    sentence_info = ABSA_model.tokenize(corpus_list)
+    for idx, tuple_item in enumerate(sentence_info):
+        sentence_info[idx] = tuple_item + (label_list[idx],)
+
+    test_batch_loader = torch.utils.data.DataLoader(sentence_info, batch_size=opt["batch_size"],
+                                                    num_workers=0, shuffle=True)
 
     # ----------------- ABSA CLASSIFIER MODEL ------------------
     # ----------------------------------------------------------
@@ -1155,6 +1176,28 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0"):
                                                                               train_accuracy / (batch_id + 1)))
         print("epoch {} train accuracy {}".format(e + 1, train_accuracy / (batch_id + 1)))
 
+        # Test Batch
+        model.eval()
+        with torch.no_grad():
+            for batch_id, (token_ids, valid_length, segment_ids, label) in enumerate(test_batch_loader):
+                # set test batch
+                token_ids = token_ids.long().to(device)
+                segment_ids = segment_ids.long().to(device)
+                valid_length = valid_length
+                label = label.long().to(device)
+
+                # get word embedding
+                attention_mask = masa.model.gen_attention_mask(token_ids, valid_length)
+                word_embedding = model.bert.get_input_embeddings()
+                x = word_embedding(token_ids)
+
+                # forward propagation
+                _, out_1, out_2 = model(x, segment_ids, attention_mask, sa=False, absa=True)
+
+                # test accuracy
+                test_accuracy += masa.model.calculate_accuracy(out_0, label)
+            print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
+
         # Validation
         r1, r2, r3 = _model_validation(ABSA_model)
         print(f"total accuracy: {'%0.2f' % (r1 * 100)}%, "
@@ -1212,4 +1255,4 @@ def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
-    ex_base_model_training()
+    ex_masa_model_training()
