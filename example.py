@@ -302,6 +302,8 @@ def _model_validation(ABSA_model):
     for idx in range(0, pos_1.shape[0]):
         corpus_list_1.append(corpus_list[pos_1[idx]])
 
+    print(corpus_list_0[0:10])
+    print(corpus_list_1[0:10])
     # split aspect info
     asp_info_0 = asp_info[pos_0, :]
     asp_info_1 = asp_info[pos_1, :]
@@ -495,7 +497,7 @@ def _absa_data_augmentation(dataset, opt=masa.model.DEFAULT_OPTION):
         else:
             aug_corpus = corpus.replace(aspect, object_text_1, 3)
             aug_label = [1, label_number]
-        data_list.append([aug_corpus, aug_label])
+        # data_list.append([aug_corpus, aug_label]) ...
 
         # single case - 일치 데이터 생성
         if rnd_5[idx]:
@@ -1065,7 +1067,7 @@ def ex_base_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", aug=Fals
 def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", sa=False):
     ABSA_model = ABSAModel(ctx=ctx)
     ABSA_model.load_kobert()
-    ABSA_model.load_model(model_path=ABSA_model_path)
+    ABSA_model.load_model(model_path=None)
 
     # load dataset
     train_data_path, test_data_path = loader.get_aspect_based_corpus_data_path()
@@ -1079,7 +1081,7 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", sa=False
         corpus_list.append(corpus.replace(aspect, opt["object_text_0"]))
 
         # set label array
-        label_array = np.array([2 if label == 'positive' else 0], dtype=np.int32)
+        label_array = np.array(2 if label == 'positive' else 0, dtype=np.int32)
 
         # set label list
         label_list.append(label_array)
@@ -1138,6 +1140,7 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", sa=False
     for e in range(opt["num_epochs"]):
         train_accuracy = 0.0
         test_accuracy = 0.0
+        sa_train_accuracy = 0.0
 
         # data augmentation
         train_corpus_list, train_label_list = _absa_data_augmentation(train_dataset, opt)
@@ -1198,7 +1201,7 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", sa=False
             if sa:
                 optimizer.zero_grad()
 
-                token_ids, valid_length, segment_ids, label = sa_batch_loader[sa_batch_idx]
+                token_ids, valid_length, segment_ids, label = list(sa_batch_loader)[sa_batch_idx]
                 sa_batch_idx = sa_batch_idx + 1
                 if sa_batch_idx == len(sa_batch_loader):
                     sa_batch_idx = 0
@@ -1233,7 +1236,7 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", sa=False
                                                                                      loss.data.cpu().numpy(),
                                                                                      sa_train_accuracy / (batch_id + 1)))
         print("epoch {} train accuracy {}".format(e + 1, train_accuracy / (batch_id + 1)))
-
+        
         if sa:
             print("epoch {} SA train accuracy {}".format(e + 1, sa_train_accuracy / (batch_id + 1)))
 
@@ -1257,6 +1260,7 @@ def ex_masa_model_training(opt=masa.model.DEFAULT_OPTION, ctx="cuda:0", sa=False
 
                 # test accuracy
                 test_accuracy += masa.model.calculate_accuracy(out_1, label)
+
             print("epoch {} test accuracy {}".format(e + 1, test_accuracy / (batch_id + 1)))
 
         # Validation
@@ -1316,4 +1320,4 @@ def ex_cosine_similarity(model_path=ABSA_model_path, ctx="cuda:0"):
 
 
 if __name__ == '__main__':
-    ex_masa_model_training()
+    ex_masa_model_training(sa=True)
