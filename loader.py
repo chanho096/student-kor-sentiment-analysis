@@ -4,6 +4,7 @@ import json
 from urllib.request import urlretrieve
 
 corpus_data_dir_name = "corpus"
+analysis_data_dir_name = "analysis"
 
 #  Naver sentiment movie corpus v1.0
 #  https://github.com/e9t/nsmc
@@ -125,6 +126,31 @@ def load_dependency_parsing_data():
             dp_head_list.append(head)
 
     return corpus_list, dp_label_list, dp_head_list
+
+
+# ---------------------------------------------
+
+
+#  다음 영화 (https://movie.daum.net/) 리뷰 데이터에 대한 속성별 감성 분석 결과
+#  1138개 영화에 대한 속성 단위 감석 분석 결과
+movie_information_data_name = "movie_information.npy"
+movie_names_data_name = "movie_names.npy"
+
+
+def load_movie_analysis_data():
+    current_dir = os.getcwd()
+    analysis_data_dir = os.path.join(current_dir, analysis_data_dir_name)
+
+    movie_information_data_path = os.path.join(analysis_data_dir, movie_information_data_name)
+    movie_names_data_path = os.path.join(analysis_data_dir, movie_names_data_name)
+    assert(os.path.isfile(movie_information_data_path))
+    assert(os.path.isfile(movie_names_data_path))
+
+    # load numpy file
+    movie_information_data = np.load(movie_information_data_path)
+    movie_names_data = np.load(movie_names_data_path)
+
+    return movie_information_data, movie_names_data
 
 
 # ---------------------------------------------

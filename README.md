@@ -23,18 +23,14 @@ pip install -r requirements.txt
 실행 경로에 ABSA_model.pt 파일이 존재해야 합니다.   
 해당 모델 파일은 KO-BERT를 기반으로 학습된 모델입니다. ( https://github.com/SKTBrain/KoBERT )   
 KO-BERT + Sentiment Analysis Classifier + Aspect-based Sentiment Analysis Classifier   
-   
-git lfs 인터페이스를 이용하여 ABSA_model.pt를 다운받을 수 있습니다.
-```
-git lfs pull
-```
 
 ### 사용된 데이터
 1.  Naver sentiment movie corpus ( https://github.com/e9t/nsmc ) 
 2.  한국경영학회, 감성분석을 위한 온라인 상품평 데이터 ( http://www.drbr.or.kr/datasets/view/?seq=20 )   
+3.  Naver sentiment movie corpus 기반, 자체 제작 데이터
 
 ### 모듈 설명
-example.py - 모델 학습, 데이터 생성 등에 대한 예시 소스 코드 입니다.   
+example.py - 모델 학습, 데이터 생성 등에 대한 예시 소스 코드 입니다. 
 prototype.py - 말뭉치 분석, 영화 리뷰 분석 등의 프로그램이 작성되어 있습니다.   
 model.py - ABSA Model 인터페이스 클래스가 구현되어 있습니다.   
 loader.py - Naver sentiment movie corpus 데이터를 불러옵니다.   

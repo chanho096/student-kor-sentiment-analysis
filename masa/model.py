@@ -202,6 +202,8 @@ class ABSAModel:
         self.model = model
         self._state = True
 
+        return True
+
     def tokenize(self, corpus_list):
         """
             tokenization with sentence-piece tokenizer (KO-BERT)
