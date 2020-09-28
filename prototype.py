@@ -34,7 +34,41 @@ def _load_fail_msg():
     input("")
 
 
-def corpus_analysis(ctx="cuda:0"):
+def corpus_analysis_with_sa(ctx="cuda:0"):
+    # create ABSA model
+    model = ABSAModel(ctx=ctx)
+    model.load_kobert()
+    if not model.load_model(ABSA_model_path):
+        _load_fail_msg()
+        return False
+
+    print("\n##### Sentiment Analysis")
+    print("##### 2020-09-28, Team 리프")
+
+    while True:
+        corpus = input("### 분석 말뭉치 입력: ")
+        if corpus == "":
+            break
+
+        # create masked corpus
+        # aspect-base sentiment analysis
+        sentence_info = model.tokenize([corpus])
+        result, _, _ = model.analyze(sentence_info, sa=True, absa=False)
+
+        result_label = np.argmax(result, axis=1)
+        result_prob = np.max(result, axis=1)
+
+        print("\n### 감성 분석 결과")
+        if result_label == 1:
+            print(f"분석 결과: 긍정적 ({'%0.2f' % (result_prob * 100)}%)")
+        else:
+            print(f"분석 결과: 부정적 ({'%0.2f' % (result_prob * 100)}%)")
+
+        input()
+        print("\n--------------------------------------")
+
+
+def corpus_analysis_with_absa(ctx="cuda:0"):
     # create ABSA model
     model = ABSAModel(ctx=ctx)
     model.load_kobert()
@@ -368,26 +402,29 @@ if __name__ == '__main__':
     _console_clear()
 
     print("\n### 분석 종류를 선택하십시오.")
-    print("[A]: Corpus Analysis")
-    print("[B]: DAUM Moview Review Analysis")
-    print("[C]: Movie Recommendation System")
-    print("[D]: Model Validation")
+    print("[A]: Sentiment Analysis")
+    print("[B]: Aspect-based Sentiment Analysis")
+    print("[C]: DAUM Moview Review Analysis")
+    print("[D]: Movie Recommendation System")
+    print("[E]: Model Validation")
 
     while True:
         key = input("### Select \'A\' ~ \'D\': ")
-        if key == 'A' or key == 'B' or key == 'C' or key =='D':
+        if key in ['A', 'B', 'C', 'D', 'E']:
             break
 
     _console_clear()
     print("")
 
     if key == 'A':
-        corpus_analysis(ctx=_ctx)
+        corpus_analysis_with_sa(ctx=_ctx)
     elif key == 'B':
-        daum_review_analysis(ctx=_ctx)
+        corpus_analysis_with_absa(ctx=_ctx)
     elif key == 'C':
-        movie_recommendation()
+        daum_review_analysis(ctx=_ctx)
     elif key == 'D':
+        movie_recommendation()
+    elif key == 'E':
         model_validation(ctx=_ctx)
 
 

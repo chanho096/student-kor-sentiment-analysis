@@ -27,6 +27,3 @@ WORKDIR /Sentiment_Analysis
 
 # 작업 디렉토리에 있는 requirements.txt로 패키지 설치
 RUN pip3 install -r requirements.txt
-
-# 컨테이너에서 실행될 명령어. 컨테이너가 실행되면 prototype.py실행시킨다
-CMD python3.7 prototype.py
