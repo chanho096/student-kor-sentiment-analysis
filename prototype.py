@@ -21,7 +21,7 @@ SIM_WORD_LIST = [["연기", "연극"],
                  ["규모", "스케일", "크기"]]
 
 ABSA_model_path = "ABSA_model.pt"
-daum_movie_url = "https://movie.daum.net/moviedb/main?movieId=41453"
+daum_movie_url = "https://movie.daum.net/main/new#slide-1-0"
 
 
 def _console_clear():
@@ -272,7 +272,7 @@ def movie_recommendation():
     score = 1 / (w1 / x1 + w2 / x2 + w3 / x3)
     rec_idx = np.argsort(score)[::-1]
 
-    print(f"\n### 영화 추쳔 결과 [영화 리뷰 긍정 비율 / 관심 속성 긍정 비율]")
+    print(f"\n### 영화 추천 결과 [영화 리뷰 긍정 비율 / 관심 속성 긍정 비율]")
     # 추천 영화 산출
     for i in range(0, 10):
         idx = rec_idx[i]
