@@ -409,7 +409,7 @@ if __name__ == '__main__':
     print("[E]: Model Validation")
 
     while True:
-        key = input("### Select \'A\' ~ \'D\': ")
+        key = input("### Select \'A\' ~ \'E\': ")
         if key in ['A', 'B', 'C', 'D', 'E']:
             break
 
