@@ -4,7 +4,8 @@
 탐색하고자 하는 주요 단어들을 지정하고, 지정된 단어에 대한 감성 분석을 실행할 수 있습니다.
 
 ## 시스템 설명 및 실행 영상
-https://www.youtube.com/watch?v=oIibK6Oc1OA
+- 1차 유튜브 영상: https://www.youtube.com/watch?v=oIibK6Oc1OA
+- 2차 유튜브 영상: https://www.youtube.com/watch?v=sEJIReXAeAo&feature=youtu.be
 
 ### 도커 허브   
 https://hub.docker.com/r/rhgo1749/sentiment_analysis
@@ -54,7 +55,7 @@ python3.7 prototype.py
 ```
 docker pull rhgo1749/sentiment_analysis:[버전명]
 
-docker run --rm -it sentiment_analysis:[버전명]  /bin/bash
+docker run --rm -it rhgo1749/sentiment_analysis:[버전명]  /bin/bash
 ```
 
 - 도커 컨테이너 내부 Ubuntu
